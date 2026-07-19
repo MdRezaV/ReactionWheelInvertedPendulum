@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/telemetry`
-const MAX_BUFFER_SIZE = 900
+const MAX_BUFFER_SIZE = 600
 
 /**
  * Hook managing the WebSocket connection to the simulation backend.

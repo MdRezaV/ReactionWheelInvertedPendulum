@@ -226,7 +226,12 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
                     json.dumps({"error": result.error})
                 )
             elif isinstance(result, ParsedCommand):
-                await _sim_manager.handle_ws_command(result.command)
+                try:
+                    await _sim_manager.handle_ws_command(result.command)
+                except (ValueError, KeyError) as exc:
+                    await websocket.send_text(
+                        json.dumps({"error": str(exc)})
+                    )
 
     except WebSocketDisconnect:
         pass

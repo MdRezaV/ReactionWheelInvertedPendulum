@@ -353,12 +353,19 @@ class LQRController(Controller):
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> None:
-        """Recompute gain if physical or control parameters changed."""
-        if (
-            self._gain is None
-            or self._last_sim_params != sim_params
+        """Recompute gain if physical or control parameters changed.
+
+        If the previous computation failed and parameters have not changed,
+        the expensive Riccati solve is skipped to avoid retrying at physics
+        rate with identical inputs.
+        """
+        params_changed = (
+            self._last_sim_params != sim_params
             or self._last_ctrl_params != ctrl_params
-        ):
+        )
+        if self._gain is None and self._warning is not None and not params_changed:
+            return
+        if self._gain is None or params_changed:
             self._compute_gain(sim_params, ctrl_params)
             self._last_sim_params = sim_params.model_copy()
             self._last_ctrl_params = ctrl_params.model_copy()
@@ -454,14 +461,10 @@ class EnergySwingUpController(Controller):
     ) -> float:
         max_torque = sim_params.max_motor_torque
 
-        # Near upright: switch to balance controller
+        # Near upright: switch to balance controller.
+        # LQR handles its own PID fallback internally if gain is unavailable.
         if self._is_near_upright(theta, theta_dot, ctrl_params):
-            if self._lqr.gain is not None or self._lqr.warning is None:
-                # Attempt LQR; it will fall back to PID internally if needed
-                return self._lqr.compute_torque(
-                    theta, theta_dot, phi_dot, energy, time, sim_params, ctrl_params
-                )
-            return self._pid.compute_torque(
+            return self._lqr.compute_torque(
                 theta, theta_dot, phi_dot, energy, time, sim_params, ctrl_params
             )
 

@@ -203,6 +203,8 @@ class SimulationManager:
         self._last_torque = 0.0
         self._last_telemetry = None
         self._warnings.clear()
+        self._disturbance_torque = 0.0
+        self._disturbance_remaining = 0
         logger.info("Simulation reset.")
 
     async def step(self, steps: int = 1) -> TelemetryMessage:
@@ -475,23 +477,26 @@ class SimulationManager:
         """Apply a single parameter update by name.
 
         Determines whether the parameter belongs to simulation or control
-        params, constructs an updated model, and applies it.
+        params, constructs an updated model via model_validate (triggering
+        full Pydantic validation), and applies it.
 
         Raises
         ------
         ValueError
-            If the parameter name is unrecognized.
+            If the parameter name is unrecognized or validation fails.
         """
         sim_fields = set(SimulationParameters.model_fields.keys())
         ctrl_fields = set(ControlParameters.model_fields.keys())
 
         if scope == "simulation" or (scope is None and name in sim_fields):
             current = self._sim.params
-            updated = current.model_copy(update={name: value})
+            data = {**current.model_dump(), name: value}
+            updated = SimulationParameters.model_validate(data)
             self.update_sim_params(updated)
         elif scope == "control" or (scope is None and name in ctrl_fields):
             current = self._ctrl_manager.control_params
-            updated = current.model_copy(update={name: value})
+            data = {**current.model_dump(), name: value}
+            updated = ControlParameters.model_validate(data)
             self.update_ctrl_params(updated)
         else:
             raise ValueError(
