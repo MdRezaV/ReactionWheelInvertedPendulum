@@ -283,3 +283,89 @@ class TestAngleWrapping:
 
         state = sim.get_state()
         assert -math.pi < state["theta"] <= math.pi
+
+
+class TestExtendedTelemetry:
+    """Verify extended telemetry fields are populated correctly."""
+
+    def test_telemetry_has_accelerations(self):
+        params = SimulationParameters(
+            initial_theta=0.1,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+        )
+        sim = Simulation(params)
+        sim.step(0.0)
+        telemetry = sim.get_telemetry(ControlMode.none)
+        assert telemetry.theta_ddot != 0.0
+        assert telemetry.phi_ddot == pytest.approx(0.0, abs=1e-10)
+
+    def test_telemetry_energy_components(self):
+        params = SimulationParameters(
+            initial_theta=0.3,
+            initial_theta_dot=1.0,
+            initial_phi_dot=2.0,
+        )
+        sim = Simulation(params)
+        sim.step(0.0)
+        telemetry = sim.get_telemetry(ControlMode.none)
+        assert telemetry.kinetic_energy > 0.0
+        assert telemetry.potential_energy < 0.0
+        assert telemetry.energy == pytest.approx(
+            telemetry.kinetic_energy + telemetry.potential_energy
+        )
+
+    def test_telemetry_angular_momentum(self):
+        params = SimulationParameters(
+            initial_theta=0.0,
+            initial_theta_dot=1.0,
+            initial_phi_dot=5.0,
+        )
+        sim = Simulation(params)
+        sim.step(0.0)
+        telemetry = sim.get_telemetry(ControlMode.none)
+        assert telemetry.angular_momentum != 0.0
+
+    def test_upright_zero_energy(self):
+        params = SimulationParameters(
+            initial_theta=0.0,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+        )
+        sim = Simulation(params)
+        telemetry = sim.get_telemetry(ControlMode.none)
+        assert telemetry.energy == pytest.approx(0.0, abs=1e-12)
+        assert telemetry.kinetic_energy == pytest.approx(0.0, abs=1e-12)
+        assert telemetry.potential_energy == pytest.approx(0.0, abs=1e-12)
+
+
+class TestDisturbance:
+    """Verify impulse disturbance application."""
+
+    def test_disturbance_changes_state(self):
+        params = SimulationParameters(
+            initial_theta=0.0,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+            damping=0.0,
+            wheel_damping=0.0,
+        )
+        sim = Simulation(params)
+        sim.apply_impulse(1.0, 50)
+        state = sim.get_state()
+        assert state["phi_dot"] != 0.0
+        assert state["time"] == pytest.approx(0.05)
+
+    def test_disturbance_respects_saturation(self):
+        params = SimulationParameters(
+            initial_theta=0.0,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+            max_motor_torque=0.5,
+            damping=0.0,
+            wheel_damping=0.0,
+        )
+        sim = Simulation(params)
+        sim.apply_impulse(10.0, 10)
+        telemetry = sim.get_telemetry(ControlMode.manual)
+        assert telemetry.torque == pytest.approx(0.5)

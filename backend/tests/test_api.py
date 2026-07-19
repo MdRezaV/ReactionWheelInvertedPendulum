@@ -218,6 +218,60 @@ class TestStepEndpoint:
         assert resp.status_code == 422
 
 
+class TestDisturbanceEndpoint:
+    """POST /api/simulation/disturbance"""
+
+    async def test_apply_disturbance(self, client: httpx.AsyncClient):
+        resp = await client.post(
+            "/api/simulation/disturbance",
+            json={"torque": 0.5, "duration_steps": 10},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "stopped"
+
+    async def test_disturbance_invalid_duration(self, client: httpx.AsyncClient):
+        resp = await client.post(
+            "/api/simulation/disturbance",
+            json={"torque": 0.5, "duration_steps": 0},
+        )
+        assert resp.status_code == 422
+
+
+class TestSpeedEndpoint:
+    """POST /api/simulation/speed"""
+
+    async def test_set_speed(self, client: httpx.AsyncClient):
+        resp = await client.post(
+            "/api/simulation/speed",
+            json={"multiplier": 2.0},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["speed_multiplier"] == pytest.approx(2.0)
+
+    async def test_speed_in_status(self, client: httpx.AsyncClient):
+        await client.post("/api/simulation/speed", json={"multiplier": 3.0})
+        resp = await client.get("/api/simulation/status")
+        data = resp.json()
+        assert data["speed_multiplier"] == pytest.approx(3.0)
+
+    async def test_speed_clamped(self, client: httpx.AsyncClient):
+        resp = await client.post(
+            "/api/simulation/speed",
+            json={"multiplier": 0.01},
+        )
+        assert resp.status_code == 422
+
+    async def test_set_sliding_mode(self, client: httpx.AsyncClient):
+        resp = await client.post(
+            "/api/simulation/control-mode",
+            json={"mode": "sliding_mode"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["control_mode"] == "sliding_mode"
+
+
 class TestWebSocket:
     """WebSocket endpoint: connection, snapshot, and command validation."""
 

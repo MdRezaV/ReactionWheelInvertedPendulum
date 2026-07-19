@@ -5,12 +5,13 @@ const CANVAS_SIZE = 280
 export default function PendulumCanvas({ latest }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
-  const stateRef = useRef({ theta: 0, phi_dot: 0, wheelAngle: 0 })
+  const stateRef = useRef({ theta: 0, phi_dot: 0, torque: 0, wheelAngle: 0, lastTime: 0 })
 
   useEffect(() => {
     if (latest) {
       stateRef.current.theta = latest.theta
       stateRef.current.phi_dot = latest.phi_dot
+      stateRef.current.torque = latest.torque ?? 0
     }
   }, [latest])
 
@@ -19,7 +20,7 @@ export default function PendulumCanvas({ latest }) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
 
-    const draw = () => {
+    const draw = (timestamp) => {
       const dpr = window.devicePixelRatio || 1
       const size = CANVAS_SIZE
 
@@ -36,10 +37,14 @@ export default function PendulumCanvas({ latest }) {
       const armLength = 100
       const wheelRadius = 18
 
-      const { theta, phi_dot } = stateRef.current
+      const { theta, phi_dot, torque } = stateRef.current
 
-      // Advance wheel visual angle
-      stateRef.current.wheelAngle += phi_dot * 0.016
+      // Advance wheel visual angle using real frame delta
+      const dt = stateRef.current.lastTime > 0
+        ? Math.min((timestamp - stateRef.current.lastTime) / 1000, 0.05)
+        : 0.016
+      stateRef.current.lastTime = timestamp
+      stateRef.current.wheelAngle += phi_dot * dt
       const wheelAngle = stateRef.current.wheelAngle
 
       // Pendulum tip position (theta=0 is upright)
@@ -117,12 +122,33 @@ export default function PendulumCanvas({ latest }) {
       ctx.stroke()
       ctx.setLineDash([])
 
+      // Torque indicator arrow at wheel
+      if (Math.abs(torque) > 0.01) {
+        const arrowDir = torque > 0 ? 1 : -1
+        const arrowLen = Math.min(Math.abs(torque) * 20, 30)
+        ctx.strokeStyle = '#e57373'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(tipX, tipY - wheelRadius - 5)
+        ctx.lineTo(tipX + arrowDir * arrowLen, tipY - wheelRadius - 5)
+        ctx.stroke()
+        // Arrowhead
+        ctx.beginPath()
+        ctx.moveTo(tipX + arrowDir * arrowLen, tipY - wheelRadius - 5)
+        ctx.lineTo(tipX + arrowDir * (arrowLen - 5), tipY - wheelRadius - 9)
+        ctx.lineTo(tipX + arrowDir * (arrowLen - 5), tipY - wheelRadius - 1)
+        ctx.closePath()
+        ctx.fillStyle = '#e57373'
+        ctx.fill()
+      }
+
       // Angle text
       ctx.fillStyle = '#aaa'
       ctx.font = '11px monospace'
       ctx.textAlign = 'left'
       ctx.fillText(`θ = ${(theta * 180 / Math.PI).toFixed(1)}°`, 8, 16)
       ctx.fillText(`φ̇ = ${phi_dot.toFixed(1)} rad/s`, 8, 30)
+      ctx.fillText(`τ = ${torque.toFixed(3)} N·m`, 8, 44)
 
       animRef.current = requestAnimationFrame(draw)
     }

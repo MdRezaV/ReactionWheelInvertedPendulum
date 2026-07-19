@@ -43,6 +43,17 @@ export function useSimulationApi() {
     return request('/manual-torque', { method: 'POST', body: JSON.stringify({ torque }) })
   }, [])
 
+  const applyDisturbance = useCallback((torque, durationSteps = 10) => {
+    return request('/disturbance', {
+      method: 'POST',
+      body: JSON.stringify({ torque, duration_steps: durationSteps }),
+    })
+  }, [])
+
+  const setSpeed = useCallback((multiplier) => {
+    return request('/speed', { method: 'POST', body: JSON.stringify({ multiplier }) })
+  }, [])
+
   return {
     getStatus,
     getParams,
@@ -55,5 +66,7 @@ export function useSimulationApi() {
     step,
     setControlMode,
     setManualTorque,
+    applyDisturbance,
+    setSpeed,
   }
 }

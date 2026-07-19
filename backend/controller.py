@@ -22,6 +22,10 @@ from scipy.linalg import solve_continuous_are
 
 from models import ControlMode, ControlParameters, SimulationParameters
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Abstract controller interface
@@ -487,6 +491,62 @@ class EnergySwingUpController(Controller):
 
 
 # ---------------------------------------------------------------------------
+# SlidingModeController
+# ---------------------------------------------------------------------------
+
+
+class SlidingModeController(Controller):
+    """Sliding mode controller for robust pendulum stabilization.
+
+    Defines a sliding surface:
+        s = c1 * theta + c2 * theta_dot + c3 * phi_dot
+
+    The control law uses a boundary-layer approximation to reduce chattering:
+        u = -K * sat(s / boundary) - eta * s
+
+    where sat() is the saturation function (linear within the boundary layer,
+    sign outside). This provides robustness to parameter uncertainty while
+    avoiding the high-frequency chattering of pure sign-based SMC.
+    """
+
+    def reset(self) -> None:
+        pass
+
+    def compute_torque(
+        self,
+        theta: float,
+        theta_dot: float,
+        phi_dot: float,
+        energy: float,
+        time: float,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+    ) -> float:
+        c1 = ctrl_params.smc_c1
+        c2 = ctrl_params.smc_c2
+        c3 = ctrl_params.smc_c3
+        k = ctrl_params.smc_k
+        eta = ctrl_params.smc_eta
+        boundary = ctrl_params.smc_boundary
+        max_torque = sim_params.max_motor_torque
+
+        # Sliding surface
+        s = c1 * theta + c2 * theta_dot + c3 * phi_dot
+
+        # Boundary-layer saturation: sat(s/boundary)
+        s_normalized = s / boundary
+        if abs(s_normalized) <= 1.0:
+            sat_val = s_normalized
+        else:
+            sat_val = 1.0 if s_normalized > 0 else -1.0
+
+        # Control law
+        u = -k * sat_val - eta * s
+
+        return self._clamp(u, max_torque)
+
+
+# ---------------------------------------------------------------------------
 # ControllerManager
 # ---------------------------------------------------------------------------
 
@@ -514,6 +574,7 @@ class ControllerManager:
         self._pid_controller: PIDController = PIDController()
         self._lqr_controller: LQRController = LQRController()
         self._energy_controller: EnergySwingUpController = EnergySwingUpController()
+        self._smc_controller: SlidingModeController = SlidingModeController()
 
     # ------------------------------------------------------------------
     # Properties
@@ -572,6 +633,7 @@ class ControllerManager:
         self._pid_controller.reset()
         self._lqr_controller.reset()
         self._energy_controller.reset()
+        self._smc_controller.reset()
         self._manual_torque = 0.0
 
     def reset_active(self) -> None:
@@ -633,5 +695,7 @@ class ControllerManager:
                 return self._lqr_controller
             case ControlMode.energy_swing_up:
                 return self._energy_controller
+            case ControlMode.sliding_mode:
+                return self._smc_controller
             case _:
                 return self._no_controller

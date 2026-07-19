@@ -14,6 +14,7 @@ simulation state mutation, REST routes, or FastAPI application creation.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Union
@@ -38,6 +39,8 @@ from models import (
     WSSetControlParamsCommand,
     WSSetControlModeCommand,
     WSSetManualTorqueCommand,
+    WSDisturbanceCommand,
+    WSSetSpeedCommand,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,8 @@ _COMMAND_REGISTRY: dict[str, type[WSCommand]] = {
     "set_control_params": WSSetControlParamsCommand,
     "set_control_mode": WSSetControlModeCommand,
     "set_manual_torque": WSSetManualTorqueCommand,
+    "apply_disturbance": WSDisturbanceCommand,
+    "set_speed": WSSetSpeedCommand,
 }
 
 _VALID_COMMAND_TYPES: frozenset[str] = frozenset(_COMMAND_REGISTRY.keys())
@@ -368,8 +373,6 @@ class WebSocketManager:
         Optional[ParseResult]
             Parsed result, or ``None`` if the socket closed.
         """
-        import json
-
         try:
             text = await websocket.receive_text()
         except Exception:

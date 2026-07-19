@@ -24,6 +24,7 @@ class ControlMode(str, Enum):
     pid = "pid"
     lqr = "lqr"
     energy_swing_up = "energy_swing_up"
+    sliding_mode = "sliding_mode"
     manual = "manual"
 
 
@@ -90,6 +91,13 @@ class ControlParameters(BaseModel):
 
     energy_swing_up_gain: float = Field(default=1.0, gt=0, description="Energy swing-up gain")
 
+    smc_c1: float = Field(default=10.0, gt=0, description="SMC sliding surface coeff on theta")
+    smc_c2: float = Field(default=5.0, gt=0, description="SMC sliding surface coeff on theta_dot")
+    smc_c3: float = Field(default=1.0, ge=0, description="SMC sliding surface coeff on phi_dot")
+    smc_k: float = Field(default=2.0, gt=0, description="SMC switching gain")
+    smc_eta: float = Field(default=0.5, ge=0, description="SMC reaching law coeff")
+    smc_boundary: float = Field(default=0.05, gt=0, description="SMC boundary layer thickness")
+
     upright_angle_threshold: float = Field(
         default=0.3, gt=0, description="Angle threshold to consider upright [rad]"
     )
@@ -111,6 +119,7 @@ class StatusResponse(BaseModel):
     control_mode: ControlMode = ControlMode.none
     client_count: int = 0
     warnings: list[str] = Field(default_factory=list)
+    speed_multiplier: float = 1.0
 
 
 class ParamsResponse(BaseModel):
@@ -122,10 +131,15 @@ class TelemetryMessage(BaseModel):
     time: float
     theta: float
     theta_dot: float
+    theta_ddot: float = 0.0
     phi: float
     phi_dot: float
+    phi_ddot: float = 0.0
     torque: float
     energy: float
+    kinetic_energy: float = 0.0
+    potential_energy: float = 0.0
+    angular_momentum: float = 0.0
     mode: ControlMode
 
 
@@ -149,6 +163,15 @@ class ManualTorqueRequest(BaseModel):
 
 class StepRequest(BaseModel):
     steps: int = Field(default=1, ge=1, description="Number of physics steps to advance")
+
+
+class DisturbanceRequest(BaseModel):
+    torque: float = Field(description="Impulse torque magnitude [N·m]")
+    duration_steps: int = Field(default=10, ge=1, le=1000, description="Duration in physics steps")
+
+
+class SpeedRequest(BaseModel):
+    multiplier: float = Field(default=1.0, ge=0.1, le=10.0, description="Simulation speed multiplier")
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +235,17 @@ class WSSetManualTorqueCommand(WSCommandBase):
     torque: float
 
 
+class WSDisturbanceCommand(WSCommandBase):
+    type: Literal["apply_disturbance"] = "apply_disturbance"
+    torque: float
+    duration_steps: int = Field(default=10, ge=1, le=1000)
+
+
+class WSSetSpeedCommand(WSCommandBase):
+    type: Literal["set_speed"] = "set_speed"
+    multiplier: float = Field(default=1.0, ge=0.1, le=10.0)
+
+
 WSCommand = (
     WSStartCommand
     | WSStopCommand
@@ -224,4 +258,6 @@ WSCommand = (
     | WSSetControlParamsCommand
     | WSSetControlModeCommand
     | WSSetManualTorqueCommand
+    | WSDisturbanceCommand
+    | WSSetSpeedCommand
 )

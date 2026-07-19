@@ -3,8 +3,11 @@ import { useSimulationApi } from './hooks/useSimulationApi'
 import { useSimulationSocket } from './hooks/useSimulationSocket'
 import ControlPanel from './components/ControlPanel'
 import SimulationChart from './components/SimulationChart'
+import EnergyChart from './components/EnergyChart'
+import TorqueChart from './components/TorqueChart'
 import PhasePlot from './components/PhasePlot'
 import PendulumCanvas from './components/PendulumCanvas'
+import NumericReadout from './components/NumericReadout'
 import StatusBar from './components/StatusBar'
 import './App.css'
 
@@ -89,6 +92,23 @@ function App() {
     }
   }, [api])
 
+  const handleDisturbance = useCallback(async (torque, durationSteps) => {
+    try {
+      await api.applyDisturbance(torque, durationSteps)
+    } catch {
+      // Ignore
+    }
+  }, [api])
+
+  const handleSetSpeed = useCallback(async (multiplier) => {
+    try {
+      await api.setSpeed(multiplier)
+      refreshStatus()
+    } catch {
+      // Ignore
+    }
+  }, [api, refreshStatus])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -111,6 +131,8 @@ function App() {
             onSetMode={handleSetMode}
             onSetManualTorque={handleSetManualTorque}
             onUpdateParams={handleUpdateParams}
+            onDisturbance={handleDisturbance}
+            onSetSpeed={handleSetSpeed}
           />
         </aside>
 
@@ -118,8 +140,13 @@ function App() {
           <div className="viz-row">
             <PendulumCanvas latest={latest} />
             <PhasePlot getBuffer={getBuffer} />
+            <NumericReadout latest={latest} />
           </div>
           <SimulationChart getBuffer={getBuffer} />
+          <div className="viz-row">
+            <EnergyChart getBuffer={getBuffer} />
+            <TorqueChart getBuffer={getBuffer} />
+          </div>
         </section>
       </main>
     </div>

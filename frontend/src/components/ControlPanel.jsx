@@ -5,6 +5,7 @@ const CONTROL_MODES = [
   { value: 'pid', label: 'PID Balance' },
   { value: 'lqr', label: 'LQR Balance' },
   { value: 'energy_swing_up', label: 'Energy Swing-Up' },
+  { value: 'sliding_mode', label: 'Sliding Mode (SMC)' },
   { value: 'manual', label: 'Manual Torque' },
 ]
 
@@ -29,6 +30,12 @@ const CTRL_PARAMS = [
   { key: 'lqr_q_phi_dot', label: 'LQR Q φ̇', min: 0, max: 100, step: 1 },
   { key: 'lqr_r', label: 'LQR R', min: 0.01, max: 10, step: 0.1 },
   { key: 'energy_swing_up_gain', label: 'Swing-Up Gain', min: 0.1, max: 10, step: 0.1 },
+  { key: 'smc_c1', label: 'SMC c₁', min: 0.1, max: 50, step: 0.5 },
+  { key: 'smc_c2', label: 'SMC c₂', min: 0.1, max: 30, step: 0.5 },
+  { key: 'smc_c3', label: 'SMC c₃', min: 0, max: 10, step: 0.1 },
+  { key: 'smc_k', label: 'SMC K', min: 0.1, max: 10, step: 0.1 },
+  { key: 'smc_eta', label: 'SMC η', min: 0, max: 5, step: 0.1 },
+  { key: 'smc_boundary', label: 'SMC Boundary', min: 0.01, max: 0.5, step: 0.01 },
 ]
 
 export default function ControlPanel({
@@ -43,9 +50,12 @@ export default function ControlPanel({
   onSetMode,
   onSetManualTorque,
   onUpdateParams,
+  onDisturbance,
+  onSetSpeed,
 }) {
   const [activeTab, setActiveTab] = useState('controls')
   const [manualTorque, setManualTorque] = useState(0)
+  const [speed, setSpeed] = useState(1.0)
 
   const isRunning = status?.status === 'running'
   const isPaused = status?.status === 'paused'
@@ -141,6 +151,43 @@ export default function ControlPanel({
               />
             </div>
           )}
+
+          <div className="control-section">
+            <label className="control-label">
+              Speed: {speed.toFixed(1)}×
+            </label>
+            <input
+              type="range"
+              min={0.1}
+              max={5}
+              step={0.1}
+              value={speed}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                setSpeed(v)
+                onSetSpeed(v)
+              }}
+              className="param-slider"
+            />
+          </div>
+
+          <div className="control-section">
+            <label className="control-label">Disturbance</label>
+            <div className="button-group">
+              <button onClick={() => onDisturbance(0.5, 20)} className="btn-disturb">
+                +0.5 N·m
+              </button>
+              <button onClick={() => onDisturbance(-0.5, 20)} className="btn-disturb">
+                −0.5 N·m
+              </button>
+              <button onClick={() => onDisturbance(1.0, 10)} className="btn-disturb">
+                +1.0 N·m
+              </button>
+              <button onClick={() => onDisturbance(-1.0, 10)} className="btn-disturb">
+                −1.0 N·m
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

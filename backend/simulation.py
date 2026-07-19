@@ -37,6 +37,8 @@ class Simulation:
         self._params = params.model_copy()
         self._time: float = 0.0
         self._last_torque: float = 0.0
+        self._last_theta_ddot: float = 0.0
+        self._last_phi_ddot: float = 0.0
 
         self._compute_effective_quantities()
         self._validate_physical_quantities()
@@ -114,6 +116,8 @@ class Simulation:
         )
         self._time = 0.0
         self._last_torque = 0.0
+        self._last_theta_ddot = 0.0
+        self._last_phi_ddot = 0.0
 
     def update_params(self, params: SimulationParameters) -> None:
         """Safely replace simulation parameters and recompute derived quantities.
@@ -144,14 +148,20 @@ class Simulation:
 
     def get_telemetry(self, mode: ControlMode) -> TelemetryMessage:
         """Return a telemetry-ready snapshot of the simulation."""
+        ke, pe = self._compute_energy_components()
         return TelemetryMessage(
             time=self._time,
             theta=float(self._state[0]),
             theta_dot=float(self._state[1]),
+            theta_ddot=self._last_theta_ddot,
             phi=float(self._state[2]),
             phi_dot=float(self._state[3]),
+            phi_ddot=self._last_phi_ddot,
             torque=self._last_torque,
-            energy=self.compute_energy(),
+            energy=ke + pe,
+            kinetic_energy=ke,
+            potential_energy=pe,
+            angular_momentum=self._compute_angular_momentum(),
             mode=mode,
         )
 
@@ -162,6 +172,11 @@ class Simulation:
         Potential energy is referenced so that the upright position
         (theta = 0) has zero potential energy.
         """
+        ke, pe = self._compute_energy_components()
+        return ke + pe
+
+    def _compute_energy_components(self) -> tuple[float, float]:
+        """Compute kinetic and potential energy separately."""
         theta, theta_dot, _phi, phi_dot = self._state
 
         # KE = 0.5 * [theta_dot, phi_dot] @ M @ [theta_dot, phi_dot]^T
@@ -174,7 +189,15 @@ class Simulation:
         # PE referenced to upright: V = gravity_coeff * (cos(theta) - 1)
         pe = self._gravity_coeff * (np.cos(theta) - 1.0)
 
-        return float(ke + pe)
+        return float(ke), float(pe)
+
+    def _compute_angular_momentum(self) -> float:
+        """Compute total angular momentum about the pivot.
+
+        L = M11 * theta_dot + M12 * phi_dot
+        """
+        _theta, theta_dot, _phi, phi_dot = self._state
+        return float(self._M11 * theta_dot + self._M12 * phi_dot)
 
     def compute_dynamics(self, state: np.ndarray, torque: float) -> np.ndarray:
         """Compute the state derivative for a given state and applied torque.
@@ -236,11 +259,28 @@ class Simulation:
 
         self._state = s + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
+        # Store accelerations from the final RK4 evaluation for telemetry
+        self._last_theta_ddot = float(k4[1])
+        self._last_phi_ddot = float(k4[3])
+
         # Normalize angles
         self._state[0] = _wrap_angle(self._state[0])
         self._state[2] = _wrap_angle(self._state[2])
 
         self._time += dt
+
+    def apply_impulse(self, torque: float, duration_steps: int) -> None:
+        """Apply a constant disturbance torque for a number of steps.
+
+        Parameters
+        ----------
+        torque : float
+            Disturbance torque [N·m] (will be saturated).
+        duration_steps : int
+            Number of physics steps to apply the disturbance.
+        """
+        for _ in range(max(1, duration_steps)):
+            self.step(torque)
 
     # ------------------------------------------------------------------
     # Properties

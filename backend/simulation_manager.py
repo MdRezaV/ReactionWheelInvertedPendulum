@@ -19,6 +19,7 @@ from controller import ControllerManager
 from models import (
     ControlMode,
     ControlParameters,
+    DisturbanceRequest,
     ParamsResponse,
     SimulationParameters,
     SimulationStatus,
@@ -72,6 +73,11 @@ class SimulationManager:
         self._last_torque: float = 0.0
         self._last_telemetry: Optional[TelemetryMessage] = None
         self._warnings: list[str] = []
+        self._speed_multiplier: float = 1.0
+
+        # Disturbance state
+        self._disturbance_torque: float = 0.0
+        self._disturbance_remaining: int = 0
 
         # Background task management
         self._task: Optional[asyncio.Task] = None
@@ -110,6 +116,11 @@ class SimulationManager:
     def warnings(self) -> list[str]:
         """Current non-fatal warnings (e.g. LQR gain failures)."""
         return list(self._warnings)
+
+    @property
+    def speed_multiplier(self) -> float:
+        """Current simulation speed multiplier."""
+        return self._speed_multiplier
 
     # ------------------------------------------------------------------
     # Lifecycle hooks (called by FastAPI lifespan)
@@ -229,6 +240,7 @@ class SimulationManager:
             status=self._status,
             time=self._sim.time,
             control_mode=self._ctrl_manager.mode,
+            speed_multiplier=self._speed_multiplier,
         )
 
     def get_params(self) -> ParamsResponse:
@@ -290,6 +302,29 @@ class SimulationManager:
         """Set the manual torque command (used when mode is 'manual')."""
         self._ctrl_manager.set_manual_torque(torque)
 
+    def set_speed_multiplier(self, multiplier: float) -> None:
+        """Set the simulation speed multiplier (0.1 to 10.0)."""
+        self._speed_multiplier = max(0.1, min(10.0, multiplier))
+        logger.info("Speed multiplier set to %.2f.", self._speed_multiplier)
+
+    def apply_disturbance(self, torque: float, duration_steps: int) -> None:
+        """Queue a disturbance impulse to be applied over subsequent steps.
+
+        Parameters
+        ----------
+        torque : float
+            Disturbance torque magnitude [N·m].
+        duration_steps : int
+            Number of physics steps over which to apply the disturbance.
+        """
+        self._disturbance_torque = torque
+        self._disturbance_remaining = max(1, duration_steps)
+        logger.info(
+            "Disturbance queued: %.3f N·m for %d steps.",
+            torque,
+            self._disturbance_remaining,
+        )
+
     # ------------------------------------------------------------------
     # WebSocket command dispatch (called from endpoint handler)
     # ------------------------------------------------------------------
@@ -320,6 +355,8 @@ class SimulationManager:
             WSSetControlParamsCommand,
             WSSetControlModeCommand,
             WSSetManualTorqueCommand,
+            WSDisturbanceCommand,
+            WSSetSpeedCommand,
         )
 
         match command:
@@ -345,6 +382,10 @@ class SimulationManager:
                 self.set_control_mode(mode)
             case WSSetManualTorqueCommand(torque=torque):
                 self.set_manual_torque(torque)
+            case WSDisturbanceCommand(torque=torque, duration_steps=duration_steps):
+                self.apply_disturbance(torque, duration_steps)
+            case WSSetSpeedCommand(multiplier=multiplier):
+                self.set_speed_multiplier(multiplier)
 
         return None
 
@@ -369,9 +410,10 @@ class SimulationManager:
                     dt = self._sim.params.time_step
 
                     # Determine how many physics steps to take based on
-                    # elapsed real time since the last iteration.
+                    # elapsed real time since the last iteration, scaled
+                    # by the speed multiplier.
                     elapsed = iteration_start - self._last_iteration_time
-                    n_steps = int(elapsed / dt) if dt > 0 else 1
+                    n_steps = int(elapsed * self._speed_multiplier / dt) if dt > 0 else 1
                     n_steps = max(1, min(n_steps, _MAX_CATCHUP_STEPS))
 
                     should_send = False
@@ -414,6 +456,12 @@ class SimulationManager:
             energy=self._sim.compute_energy(),
             time=self._sim.time,
         )
+
+        # Superimpose active disturbance
+        if self._disturbance_remaining > 0:
+            torque += self._disturbance_torque
+            self._disturbance_remaining -= 1
+
         self._sim.step(torque)
         self._last_torque = torque
 

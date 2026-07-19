@@ -5,6 +5,7 @@ const MODE_LABELS = {
   pid: 'PID Balance',
   lqr: 'LQR Balance',
   energy_swing_up: 'Energy Swing-Up',
+  sliding_mode: 'Sliding Mode',
   manual: 'Manual Torque',
 }
 
@@ -42,6 +43,12 @@ export default function StatusBar({ status, connected, warnings }) {
         <span className="status-label">Clients:</span>
         <span className="status-value">{clientCount}</span>
       </div>
+      {status?.speed_multiplier && status.speed_multiplier !== 1.0 && (
+        <div className="status-item">
+          <span className="status-label">Speed:</span>
+          <span className="status-value">{status.speed_multiplier.toFixed(1)}×</span>
+        </div>
+      )}
       {warnings && warnings.length > 0 && (
         <div className="status-item status-warning">
           <span>⚠ {warnings[0]}</span>

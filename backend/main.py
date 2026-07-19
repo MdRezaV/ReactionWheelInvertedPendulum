@@ -29,10 +29,12 @@ from config import (
 from models import (
     ControlModeRequest,
     ControlParameters,
+    DisturbanceRequest,
     ManualTorqueRequest,
     ParamsResponse,
     ParamsUpdateRequest,
     SimulationParameters,
+    SpeedRequest,
     StatusResponse,
     StepRequest,
     TelemetryMessage,
@@ -181,6 +183,18 @@ async def set_control_mode(request: ControlModeRequest) -> StatusResponse:
 async def set_manual_torque(request: ManualTorqueRequest) -> dict:
     _sim_manager.set_manual_torque(request.torque)
     return {"torque": request.torque}
+
+
+@app.post("/api/simulation/disturbance", response_model=StatusResponse)
+async def apply_disturbance(request: DisturbanceRequest) -> StatusResponse:
+    _sim_manager.apply_disturbance(request.torque, request.duration_steps)
+    return await get_status()
+
+
+@app.post("/api/simulation/speed", response_model=StatusResponse)
+async def set_speed(request: SpeedRequest) -> StatusResponse:
+    _sim_manager.set_speed_multiplier(request.multiplier)
+    return await get_status()
 
 
 # ---------------------------------------------------------------------------

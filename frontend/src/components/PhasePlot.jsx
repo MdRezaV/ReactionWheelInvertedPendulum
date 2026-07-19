@@ -1,11 +1,24 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const SIZE = 220
 const PADDING = 30
 
+const AXIS_OPTIONS = [
+  { x: 'theta', y: 'theta_dot', label: 'θ vs θ̇' },
+  { x: 'theta', y: 'phi_dot', label: 'θ vs φ̇' },
+  { x: 'phi_dot', y: 'theta_dot', label: 'φ̇ vs θ̇' },
+  { x: 'theta', y: 'torque', label: 'θ vs τ' },
+]
+
 export default function PhasePlot({ getBuffer }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
+  const [axisPair, setAxisPair] = useState(0)
+  const axisRef = useRef(0)
+
+  useEffect(() => {
+    axisRef.current = axisPair
+  }, [axisPair])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,30 +62,36 @@ export default function PhasePlot({ getBuffer }) {
         return
       }
 
+      const axes = AXIS_OPTIONS[axisRef.current]
+      const xKey = axes.x
+      const yKey = axes.y
+
       // Auto-scale
-      let thMin = Infinity, thMax = -Infinity
-      let thdMin = Infinity, thdMax = -Infinity
+      let xMin = Infinity, xMax = -Infinity
+      let yMin = Infinity, yMax = -Infinity
       for (const pt of buffer) {
-        if (pt.theta < thMin) thMin = pt.theta
-        if (pt.theta > thMax) thMax = pt.theta
-        if (pt.theta_dot < thdMin) thdMin = pt.theta_dot
-        if (pt.theta_dot > thdMax) thdMax = pt.theta_dot
+        const xv = pt[xKey] ?? 0
+        const yv = pt[yKey] ?? 0
+        if (xv < xMin) xMin = xv
+        if (xv > xMax) xMax = xv
+        if (yv < yMin) yMin = yv
+        if (yv > yMax) yMax = yv
       }
-      const thRange = Math.max(thMax - thMin, 0.1)
-      const thdRange = Math.max(thdMax - thdMin, 0.1)
-      const thMid = (thMin + thMax) / 2
-      const thdMid = (thdMin + thdMax) / 2
-      const thHalf = thRange / 2 * 1.2
-      const thdHalf = thdRange / 2 * 1.2
+      const xRange = Math.max(xMax - xMin, 0.1)
+      const yRange = Math.max(yMax - yMin, 0.1)
+      const xMid = (xMin + xMax) / 2
+      const yMid = (yMin + yMax) / 2
+      const xHalf = xRange / 2 * 1.2
+      const yHalf = yRange / 2 * 1.2
 
       // Draw trajectory with fading
       const len = buffer.length
       for (let i = 1; i < len; i++) {
         const alpha = 0.2 + 0.8 * (i / len)
-        const x1 = PADDING + ((buffer[i - 1].theta - (thMid - thHalf)) / (2 * thHalf)) * plotW
-        const y1 = PADDING + plotH - ((buffer[i - 1].theta_dot - (thdMid - thdHalf)) / (2 * thdHalf)) * plotH
-        const x2 = PADDING + ((buffer[i].theta - (thMid - thHalf)) / (2 * thHalf)) * plotW
-        const y2 = PADDING + plotH - ((buffer[i].theta_dot - (thdMid - thdHalf)) / (2 * thdHalf)) * plotH
+        const x1 = PADDING + ((buffer[i - 1][xKey] - (xMid - xHalf)) / (2 * xHalf)) * plotW
+        const y1 = PADDING + plotH - ((buffer[i - 1][yKey] - (yMid - yHalf)) / (2 * yHalf)) * plotH
+        const x2 = PADDING + ((buffer[i][xKey] - (xMid - xHalf)) / (2 * xHalf)) * plotW
+        const y2 = PADDING + plotH - ((buffer[i][yKey] - (yMid - yHalf)) / (2 * yHalf)) * plotH
 
         ctx.strokeStyle = `rgba(79, 195, 247, ${alpha})`
         ctx.lineWidth = 1.5
@@ -84,8 +103,8 @@ export default function PhasePlot({ getBuffer }) {
 
       // Current point
       const last = buffer[len - 1]
-      const cx = PADDING + ((last.theta - (thMid - thHalf)) / (2 * thHalf)) * plotW
-      const cy = PADDING + plotH - ((last.theta_dot - (thdMid - thdHalf)) / (2 * thdHalf)) * plotH
+      const cx = PADDING + ((last[xKey] - (xMid - xHalf)) / (2 * xHalf)) * plotW
+      const cy = PADDING + plotH - ((last[yKey] - (yMid - yHalf)) / (2 * yHalf)) * plotH
       ctx.fillStyle = '#ff5252'
       ctx.beginPath()
       ctx.arc(cx, cy, 4, 0, Math.PI * 2)
@@ -95,11 +114,11 @@ export default function PhasePlot({ getBuffer }) {
       ctx.fillStyle = '#888'
       ctx.font = '10px monospace'
       ctx.textAlign = 'center'
-      ctx.fillText('θ', PADDING + plotW / 2, h - 6)
+      ctx.fillText(xKey, PADDING + plotW / 2, h - 6)
       ctx.save()
       ctx.translate(10, PADDING + plotH / 2)
       ctx.rotate(-Math.PI / 2)
-      ctx.fillText('θ̇', 0, 0)
+      ctx.fillText(yKey, 0, 0)
       ctx.restore()
 
       animRef.current = requestAnimationFrame(draw)
@@ -114,7 +133,17 @@ export default function PhasePlot({ getBuffer }) {
   return (
     <div className="chart-container">
       <div className="chart-header">
-        <h3>Phase Portrait (θ vs θ̇)</h3>
+        <h3>Phase Portrait</h3>
+        <select
+          value={axisPair}
+          onChange={(e) => setAxisPair(Number(e.target.value))}
+          className="mode-select"
+          style={{ padding: '2px 6px', fontSize: '11px' }}
+        >
+          {AXIS_OPTIONS.map((opt, i) => (
+            <option key={i} value={i}>{opt.label}</option>
+          ))}
+        </select>
       </div>
       <canvas ref={canvasRef} style={{ width: '100%', height: SIZE }} />
     </div>

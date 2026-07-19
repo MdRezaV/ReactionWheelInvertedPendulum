@@ -157,3 +157,80 @@ class TestTelemetryMessage:
         assert msg.time == 1.0
         assert msg.theta == 0.01
         assert msg.mode == ControlMode.lqr
+
+    def test_extended_fields_default(self):
+        msg = TelemetryMessage(
+            time=0.0,
+            theta=0.0,
+            theta_dot=0.0,
+            phi=0.0,
+            phi_dot=0.0,
+            torque=0.0,
+            energy=0.0,
+            mode=ControlMode.none,
+        )
+        assert msg.theta_ddot == 0.0
+        assert msg.phi_ddot == 0.0
+        assert msg.kinetic_energy == 0.0
+        assert msg.potential_energy == 0.0
+        assert msg.angular_momentum == 0.0
+
+    def test_extended_fields_populated(self):
+        msg = TelemetryMessage(
+            time=2.0,
+            theta=0.1,
+            theta_dot=0.5,
+            theta_ddot=-1.2,
+            phi=1.0,
+            phi_dot=8.0,
+            phi_ddot=3.5,
+            torque=0.4,
+            energy=2.1,
+            kinetic_energy=1.8,
+            potential_energy=0.3,
+            angular_momentum=0.7,
+            mode=ControlMode.sliding_mode,
+        )
+        assert msg.theta_ddot == -1.2
+        assert msg.phi_ddot == 3.5
+        assert msg.kinetic_energy == 1.8
+        assert msg.potential_energy == 0.3
+        assert msg.angular_momentum == 0.7
+        assert msg.mode == ControlMode.sliding_mode
+
+
+class TestControlModeEnum:
+    """Verify all control modes including SMC."""
+
+    def test_sliding_mode_exists(self):
+        assert ControlMode.sliding_mode == "sliding_mode"
+
+    def test_all_modes(self):
+        modes = [m.value for m in ControlMode]
+        assert "none" in modes
+        assert "pid" in modes
+        assert "lqr" in modes
+        assert "energy_swing_up" in modes
+        assert "sliding_mode" in modes
+        assert "manual" in modes
+
+
+class TestControlParametersSMC:
+    """Verify SMC parameter defaults and validation."""
+
+    def test_smc_defaults(self):
+        params = ControlParameters()
+        assert params.smc_c1 == 10.0
+        assert params.smc_c2 == 5.0
+        assert params.smc_c3 == 1.0
+        assert params.smc_k == 2.0
+        assert params.smc_eta == 0.5
+        assert params.smc_boundary == 0.05
+
+    def test_rejects_negative_smc_k(self):
+        with pytest.raises(ValidationError):
+            ControlParameters(smc_k=-1.0)
+
+    def test_rejects_zero_smc_boundary(self):
+        with pytest.raises(ValidationError):
+            ControlParameters(smc_boundary=0.0)

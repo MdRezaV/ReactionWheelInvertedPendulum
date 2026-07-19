@@ -1,16 +1,15 @@
 import { useEffect, useRef } from 'react'
 
-const SERIES_CONFIG = [
-  { key: 'theta', label: 'θ (rad)', color: '#4fc3f7' },
-  { key: 'theta_dot', label: 'θ̇ (rad/s)', color: '#81c784' },
-  { key: 'phi_dot', label: 'φ̇ (rad/s)', color: '#ffb74d' },
-  { key: 'torque', label: 'Torque (N·m)', color: '#e57373' },
+const SERIES = [
+  { key: 'kinetic_energy', label: 'KE (J)', color: '#4fc3f7' },
+  { key: 'potential_energy', label: 'PE (J)', color: '#ffb74d' },
+  { key: 'energy', label: 'Total (J)', color: '#81c784' },
 ]
 
-const CHART_HEIGHT = 160
-const PADDING = { top: 10, right: 10, bottom: 20, left: 50 }
+const CHART_HEIGHT = 150
+const PADDING = { top: 10, right: 10, bottom: 20, left: 55 }
 
-export default function SimulationChart({ getBuffer }) {
+export default function EnergyChart({ getBuffer }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
 
@@ -37,11 +36,10 @@ export default function SimulationChart({ getBuffer }) {
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
-      // Background
       ctx.fillStyle = '#1a1a2e'
       ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH)
 
-      // Grid lines
+      // Grid
       ctx.strokeStyle = '#2a2a4a'
       ctx.lineWidth = 0.5
       for (let i = 0; i <= 4; i++) {
@@ -57,47 +55,62 @@ export default function SimulationChart({ getBuffer }) {
         return
       }
 
-      // Compute time range
       const tEnd = buffer[buffer.length - 1].time
       const tStart = buffer[0].time
       const tRange = Math.max(tEnd - tStart, 0.001)
 
-      // Draw each series
-      for (const series of SERIES_CONFIG) {
-        // Auto-scale Y
-        let yMin = Infinity
-        let yMax = -Infinity
-        for (const pt of buffer) {
-          const v = pt[series.key]
+      // Shared Y scale across all energy series
+      let yMin = Infinity
+      let yMax = -Infinity
+      for (const pt of buffer) {
+        for (const s of SERIES) {
+          const v = pt[s.key] ?? 0
           if (v < yMin) yMin = v
           if (v > yMax) yMax = v
         }
-        const yPad = (yMax - yMin) * 0.1 || 0.5
-        yMin -= yPad
-        yMax += yPad
-        const yRange = yMax - yMin || 1
+      }
+      const yPad = (yMax - yMin) * 0.1 || 0.5
+      yMin -= yPad
+      yMax += yPad
+      const yRange = yMax - yMin || 1
 
+      // Zero line
+      if (yMin < 0 && yMax > 0) {
+        const zeroY = PADDING.top + plotH - ((0 - yMin) / yRange) * plotH
+        ctx.strokeStyle = '#ffffff33'
+        ctx.lineWidth = 1
+        ctx.setLineDash([3, 3])
+        ctx.beginPath()
+        ctx.moveTo(PADDING.left, zeroY)
+        ctx.lineTo(PADDING.left + plotW, zeroY)
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
+
+      for (const series of SERIES) {
         ctx.strokeStyle = series.color
         ctx.lineWidth = 1.5
         ctx.beginPath()
-
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
+          const v = pt[series.key] ?? 0
           const x = PADDING.left + ((pt.time - tStart) / tRange) * plotW
-          const y = PADDING.top + plotH - ((pt[series.key] - yMin) / yRange) * plotH
-
+          const y = PADDING.top + plotH - ((v - yMin) / yRange) * plotH
           if (i === 0) ctx.moveTo(x, y)
           else ctx.lineTo(x, y)
         }
         ctx.stroke()
       }
 
-      // Y-axis labels (normalized: each series auto-scaled independently)
-      ctx.fillStyle = '#666'
-      ctx.font = '9px monospace'
+      // Y-axis labels
+      ctx.fillStyle = '#888'
+      ctx.font = '10px monospace'
       ctx.textAlign = 'right'
-      ctx.fillText('auto', PADDING.left - 4, PADDING.top + 8)
-      ctx.fillText('scale', PADDING.left - 4, PADDING.top + plotH - 2)
+      for (let i = 0; i <= 4; i++) {
+        const val = yMin + (yRange / 4) * (4 - i)
+        const y = PADDING.top + (plotH / 4) * i
+        ctx.fillText(val.toFixed(2), PADDING.left - 4, y + 3)
+      }
 
       // Time axis
       ctx.textAlign = 'center'
@@ -116,9 +129,9 @@ export default function SimulationChart({ getBuffer }) {
   return (
     <div className="chart-container">
       <div className="chart-header">
-        <h3>Time Series</h3>
+        <h3>Energy</h3>
         <div className="chart-legend">
-          {SERIES_CONFIG.map((s) => (
+          {SERIES.map((s) => (
             <span key={s.key} className="legend-item">
               <span className="legend-color" style={{ background: s.color }} />
               {s.label}

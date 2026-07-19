@@ -312,6 +312,56 @@
   border-radius: 2px;
 }
 
+/* Numeric Readout */
+.readout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+
+.readout-cell {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  background: var(--card-bg, #16162a);
+}
+
+.readout-label {
+  font-size: 10px;
+  color: #888;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.readout-value {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-h);
+  margin-top: 2px;
+}
+
+/* Disturbance buttons */
+.btn-disturb {
+  border-color: #ce93d866;
+  color: #ce93d8;
+}
+
+.btn-step {
+  border-color: #4db6ac66;
+  color: #4db6ac;
+}
+
+.btn-pause {
+  border-color: #ffb74d66;
+  color: #ffb74d;
+}
+
+.btn-resume {
+  border-color: #81c78466;
+  color: #81c784;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .app-main {
