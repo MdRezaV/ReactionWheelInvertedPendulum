@@ -1,0 +1,460 @@
+"""Runtime simulation manager for the reaction wheel inverted pendulum.
+
+Owns the authoritative simulation lifecycle: background physics loop,
+telemetry broadcasting, parameter updates, and control mode switching.
+Designed to be started/stopped by the FastAPI application lifespan hooks.
+
+This module does NOT implement HTTP route handlers or WebSocket endpoint
+registration. Those belong in main.py, which delegates to this manager.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Optional
+
+from config import DEFAULT_PHYSICS_RATE_HZ, DEFAULT_TELEMETRY_RATE_HZ
+from controller import ControllerManager
+from models import (
+    ControlMode,
+    ControlParameters,
+    ParamsResponse,
+    SimulationParameters,
+    SimulationStatus,
+    StatusResponse,
+    TelemetryMessage,
+)
+from simulation import Simulation
+from websocket_manager import WebSocketManager
+
+logger = logging.getLogger(__name__)
+
+# Maximum physics steps allowed per loop iteration to prevent a death
+# spiral when the machine falls behind real-time pacing.
+_MAX_CATCHUP_STEPS: int = 20
+
+
+class SimulationManager:
+    """Orchestrates the simulation runtime: physics loop, telemetry, and state.
+
+    Parameters
+    ----------
+    sim_params : SimulationParameters
+        Initial physical and numerical parameters.
+    ctrl_params : ControlParameters
+        Initial control gains and thresholds.
+    ws_manager : WebSocketManager, optional
+        Pre-configured WebSocket manager. Created internally if not provided.
+    physics_rate_hz : int
+        Physics loop target frequency (should equal 1 / time_step).
+    telemetry_rate_hz : int
+        Telemetry broadcast frequency.
+    """
+
+    def __init__(
+        self,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+        ws_manager: Optional[WebSocketManager] = None,
+        physics_rate_hz: int = DEFAULT_PHYSICS_RATE_HZ,
+        telemetry_rate_hz: int = DEFAULT_TELEMETRY_RATE_HZ,
+    ) -> None:
+        self._sim = Simulation(sim_params)
+        self._ctrl_manager = ControllerManager(sim_params, ctrl_params)
+        self._ws_manager = ws_manager or WebSocketManager(physics_rate_hz, telemetry_rate_hz)
+
+        self._physics_rate_hz = physics_rate_hz
+        self._telemetry_rate_hz = telemetry_rate_hz
+
+        # Authoritative runtime state
+        self._status: SimulationStatus = SimulationStatus.stopped
+        self._last_torque: float = 0.0
+        self._last_telemetry: Optional[TelemetryMessage] = None
+        self._warnings: list[str] = []
+
+        # Background task management
+        self._task: Optional[asyncio.Task] = None
+        self._shutdown_event: asyncio.Event = asyncio.Event()
+        self._last_iteration_time: float = 0.0
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
+    @property
+    def status(self) -> SimulationStatus:
+        return self._status
+
+    @property
+    def simulation(self) -> Simulation:
+        """Direct access to the physics simulation (read-only use recommended)."""
+        return self._sim
+
+    @property
+    def controller_manager(self) -> ControllerManager:
+        """Direct access to the controller manager."""
+        return self._ctrl_manager
+
+    @property
+    def ws_manager(self) -> WebSocketManager:
+        """The WebSocket manager used for telemetry broadcasting."""
+        return self._ws_manager
+
+    @property
+    def last_telemetry(self) -> Optional[TelemetryMessage]:
+        """Most recent telemetry snapshot, or None if never produced."""
+        return self._last_telemetry
+
+    @property
+    def warnings(self) -> list[str]:
+        """Current non-fatal warnings (e.g. LQR gain failures)."""
+        return list(self._warnings)
+
+    # ------------------------------------------------------------------
+    # Lifecycle hooks (called by FastAPI lifespan)
+    # ------------------------------------------------------------------
+
+    async def startup(self) -> None:
+        """Start the background simulation loop.
+
+        Call this during FastAPI application startup. The loop begins
+        in the stopped state; call :meth:`start` to begin advancing physics.
+        """
+        if self._task is not None and not self._task.done():
+            logger.warning("SimulationManager.startup called but task already running.")
+            return
+
+        self._shutdown_event.clear()
+        self._task = asyncio.create_task(self._run_loop(), name="sim-loop")
+        logger.info("SimulationManager background loop started.")
+
+    async def shutdown(self) -> None:
+        """Cancel the background loop and await clean termination.
+
+        Call this during FastAPI application shutdown.
+        """
+        self._shutdown_event.set()
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        self._status = SimulationStatus.stopped
+        logger.info("SimulationManager background loop stopped.")
+
+    # ------------------------------------------------------------------
+    # Simulation control operations
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Begin advancing the physics simulation in real time."""
+        if self._status == SimulationStatus.running:
+            return
+        self._status = SimulationStatus.running
+        self._last_iteration_time = asyncio.get_event_loop().time()
+        logger.info("Simulation started.")
+
+    async def stop(self) -> None:
+        """Stop the simulation. Physics no longer advances."""
+        if self._status == SimulationStatus.stopped:
+            return
+        self._status = SimulationStatus.stopped
+        logger.info("Simulation stopped at t=%.4f s.", self._sim.time)
+
+    async def pause(self) -> None:
+        """Pause the simulation. Physics halts but state is preserved."""
+        if self._status != SimulationStatus.running:
+            return
+        self._status = SimulationStatus.paused
+        logger.info("Simulation paused at t=%.4f s.", self._sim.time)
+
+    async def resume(self) -> None:
+        """Resume a paused simulation."""
+        if self._status != SimulationStatus.paused:
+            return
+        self._status = SimulationStatus.running
+        self._last_iteration_time = asyncio.get_event_loop().time()
+        logger.info("Simulation resumed at t=%.4f s.", self._sim.time)
+
+    async def reset(self) -> None:
+        """Reset simulation state to initial conditions.
+
+        Stops the simulation, resets physics and controllers, and clears
+        telemetry history. Does not change parameters or control mode.
+        """
+        self._status = SimulationStatus.stopped
+        self._sim.reset()
+        self._ctrl_manager.reset()
+        self._ws_manager.reset_throttle()
+        self._last_torque = 0.0
+        self._last_telemetry = None
+        self._warnings.clear()
+        logger.info("Simulation reset.")
+
+    async def step(self, steps: int = 1) -> TelemetryMessage:
+        """Manually advance the simulation by a fixed number of physics steps.
+
+        Works regardless of simulation status (stopped, paused, or running).
+        Produces and broadcasts an immediate telemetry snapshot.
+
+        Parameters
+        ----------
+        steps : int
+            Number of fixed time-step physics steps to advance (>= 1).
+
+        Returns
+        -------
+        TelemetryMessage
+            The telemetry snapshot after the final step.
+        """
+        steps = max(1, steps)
+        for _ in range(steps):
+            self._physics_step()
+
+        telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
+        self._last_telemetry = telemetry
+        await self._ws_manager.broadcast_telemetry(telemetry)
+        return telemetry
+
+    # ------------------------------------------------------------------
+    # Status and parameter queries
+    # ------------------------------------------------------------------
+
+    def get_status(self) -> StatusResponse:
+        """Return the current simulation status summary."""
+        return StatusResponse(
+            status=self._status,
+            time=self._sim.time,
+            control_mode=self._ctrl_manager.mode,
+        )
+
+    def get_params(self) -> ParamsResponse:
+        """Return current simulation and control parameters."""
+        return ParamsResponse(
+            simulation=self._sim.params,
+            control=self._ctrl_manager.control_params,
+        )
+
+    # ------------------------------------------------------------------
+    # Parameter and mode updates
+    # ------------------------------------------------------------------
+
+    def update_sim_params(self, params: SimulationParameters) -> None:
+        """Replace simulation parameters with validation.
+
+        Updates the physics model and notifies the controller manager so
+        LQR gains are recomputed on the next torque evaluation. If the
+        time step changes, the broadcast throttle is reconfigured.
+
+        Raises
+        ------
+        ValueError
+            If the new parameters produce invalid physical quantities.
+        """
+        old_time_step = self._sim.params.time_step
+        self._sim.update_params(params)
+        self._ctrl_manager.update_sim_params(params)
+
+        new_time_step = params.time_step
+        if new_time_step != old_time_step:
+            new_physics_rate = max(1, round(1.0 / new_time_step))
+            self._physics_rate_hz = new_physics_rate
+            self._ws_manager.update_rates(new_physics_rate, self._telemetry_rate_hz)
+            logger.info(
+                "Time step changed to %.6f s; physics rate now %d Hz.",
+                new_time_step,
+                new_physics_rate,
+            )
+
+        self._collect_warnings()
+
+    def update_ctrl_params(self, params: ControlParameters) -> None:
+        """Replace control parameters with validation.
+
+        LQR gains are recomputed lazily on the next torque computation.
+        PID integrators are preserved across gain changes.
+        """
+        self._ctrl_manager.update_control_params(params)
+        self._collect_warnings()
+
+    def set_control_mode(self, mode: ControlMode) -> None:
+        """Switch the active control mode, resetting the new controller."""
+        self._ctrl_manager.set_mode(mode)
+        self._collect_warnings()
+        logger.info("Control mode set to '%s'.", mode.value)
+
+    def set_manual_torque(self, torque: float) -> None:
+        """Set the manual torque command (used when mode is 'manual')."""
+        self._ctrl_manager.set_manual_torque(torque)
+
+    # ------------------------------------------------------------------
+    # WebSocket command dispatch (called from endpoint handler)
+    # ------------------------------------------------------------------
+
+    async def handle_ws_command(self, command) -> Optional[TelemetryMessage]:
+        """Dispatch a parsed WebSocket command to the appropriate operation.
+
+        Parameters
+        ----------
+        command : WSCommand
+            A validated command object from WebSocketManager.parse_command.
+
+        Returns
+        -------
+        Optional[TelemetryMessage]
+            A telemetry snapshot if the command produced one (e.g. step),
+            otherwise None.
+        """
+        from models import (
+            WSStartCommand,
+            WSStopCommand,
+            WSPauseCommand,
+            WSResumeCommand,
+            WSResetCommand,
+            WSStepCommand,
+            WSSetParamCommand,
+            WSSetSimulationParamsCommand,
+            WSSetControlParamsCommand,
+            WSSetControlModeCommand,
+            WSSetManualTorqueCommand,
+        )
+
+        match command:
+            case WSStartCommand():
+                await self.start()
+            case WSStopCommand():
+                await self.stop()
+            case WSPauseCommand():
+                await self.pause()
+            case WSResumeCommand():
+                await self.resume()
+            case WSResetCommand():
+                await self.reset()
+            case WSStepCommand(steps=n):
+                return await self.step(n)
+            case WSSetParamCommand(name=name, value=value, scope=scope):
+                self._apply_single_param(name, value, scope)
+            case WSSetSimulationParamsCommand(params=params):
+                self.update_sim_params(params)
+            case WSSetControlParamsCommand(params=params):
+                self.update_ctrl_params(params)
+            case WSSetControlModeCommand(mode=mode):
+                self.set_control_mode(mode)
+            case WSSetManualTorqueCommand(torque=torque):
+                self.set_manual_torque(torque)
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Background physics loop
+    # ------------------------------------------------------------------
+
+    async def _run_loop(self) -> None:
+        """Main background coroutine: advances physics and broadcasts telemetry.
+
+        Runs from startup() until shutdown(). When the simulation status is
+        not 'running', the loop sleeps without advancing physics but remains
+        alive so the manager stays responsive to external method calls.
+        """
+        loop = asyncio.get_event_loop()
+
+        try:
+            while not self._shutdown_event.is_set():
+                iteration_start = loop.time()
+
+                if self._status == SimulationStatus.running:
+                    dt = self._sim.params.time_step
+
+                    # Determine how many physics steps to take based on
+                    # elapsed real time since the last iteration.
+                    elapsed = iteration_start - self._last_iteration_time
+                    n_steps = int(elapsed / dt) if dt > 0 else 1
+                    n_steps = max(1, min(n_steps, _MAX_CATCHUP_STEPS))
+
+                    should_send = False
+                    for _ in range(n_steps):
+                        self._physics_step()
+                        if self._ws_manager.should_broadcast():
+                            should_send = True
+
+                    if should_send and self._ws_manager.has_clients:
+                        telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
+                        self._last_telemetry = telemetry
+                        await self._ws_manager.broadcast_telemetry(telemetry)
+
+                self._last_iteration_time = loop.time()
+
+                # Pace the loop: sleep for approximately one physics step.
+                # When not running, use a longer idle sleep to reduce CPU.
+                if self._status == SimulationStatus.running:
+                    dt = self._sim.params.time_step
+                    sleep_time = dt - (loop.time() - iteration_start)
+                    if sleep_time > 0:
+                        await asyncio.sleep(sleep_time)
+                    else:
+                        await asyncio.sleep(0)
+                else:
+                    # Idle: check back periodically without burning CPU.
+                    await asyncio.sleep(0.05)
+
+        except asyncio.CancelledError:
+            logger.debug("Simulation loop cancelled.")
+            raise
+
+    def _physics_step(self) -> None:
+        """Execute a single physics step: compute torque, integrate, update state."""
+        state = self._sim.get_state()
+        torque = self._ctrl_manager.compute_torque(
+            theta=state["theta"],
+            theta_dot=state["theta_dot"],
+            phi_dot=state["phi_dot"],
+            energy=self._sim.compute_energy(),
+            time=self._sim.time,
+        )
+        self._sim.step(torque)
+        self._last_torque = torque
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _apply_single_param(
+        self, name: str, value: float, scope: Optional[str]
+    ) -> None:
+        """Apply a single parameter update by name.
+
+        Determines whether the parameter belongs to simulation or control
+        params, constructs an updated model, and applies it.
+
+        Raises
+        ------
+        ValueError
+            If the parameter name is unrecognized.
+        """
+        sim_fields = set(SimulationParameters.model_fields.keys())
+        ctrl_fields = set(ControlParameters.model_fields.keys())
+
+        if scope == "simulation" or (scope is None and name in sim_fields):
+            current = self._sim.params
+            updated = current.model_copy(update={name: value})
+            self.update_sim_params(updated)
+        elif scope == "control" or (scope is None and name in ctrl_fields):
+            current = self._ctrl_manager.control_params
+            updated = current.model_copy(update={name: value})
+            self.update_ctrl_params(updated)
+        else:
+            raise ValueError(
+                f"Unknown parameter '{name}' (scope={scope}). "
+                f"Valid simulation params: {sorted(sim_fields)}. "
+                f"Valid control params: {sorted(ctrl_fields)}."
+            )
+
+    def _collect_warnings(self) -> None:
+        """Refresh the non-fatal warnings list from subsystems."""
+        self._warnings.clear()
+        lqr_warning = self._ctrl_manager.lqr_warning
+        if lqr_warning:
+            self._warnings.append(lqr_warning)
