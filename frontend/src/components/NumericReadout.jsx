@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { fmt } from '../utils/format'
 
 const RAD2DEG = 180 / Math.PI
+const LERP_FACTOR = 0.14
 
 const FIELDS = [
   { key: 'theta', label: 'زاویه پاندول', format: (v) => `${fmt(v * RAD2DEG, 1)}°` },
@@ -14,6 +16,44 @@ const FIELDS = [
 ]
 
 export default function NumericReadout({ latest }) {
+  const displayRef = useRef({})
+  const targetRef = useRef({})
+  const [display, setDisplay] = useState({})
+  const rafRef = useRef(null)
+
+  useEffect(() => {
+    if (latest) {
+      for (const f of FIELDS) {
+        targetRef.current[f.key] = latest[f.key] ?? 0
+      }
+    }
+  }, [latest])
+
+  useEffect(() => {
+    const animate = () => {
+      let changed = false
+      for (const f of FIELDS) {
+        const target = targetRef.current[f.key] ?? 0
+        const current = displayRef.current[f.key] ?? 0
+        const next = current + (target - current) * LERP_FACTOR
+        if (Math.abs(next - target) < 1e-6) {
+          displayRef.current[f.key] = target
+        } else {
+          displayRef.current[f.key] = next
+          changed = true
+        }
+      }
+      if (changed) {
+        setDisplay({ ...displayRef.current })
+      }
+      rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
+
+  const values = Object.keys(display).length > 0 ? display : (latest || {})
+
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
       <div className="px-3 py-1.5 border-b border-border">
@@ -24,7 +64,7 @@ export default function NumericReadout({ latest }) {
           <div key={f.key} className="flex flex-col px-2 py-1.5 bg-card">
             <span className="text-[9px] text-text-dim font-bold">{f.label}</span>
             <span className="text-[11px] font-mono text-text-h mt-0.5" dir="ltr">
-              {latest ? f.format(latest[f.key] ?? 0) : '—'}
+              {latest ? f.format(values[f.key] ?? 0) : '—'}
             </span>
           </div>
         ))}

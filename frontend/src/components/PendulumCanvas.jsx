@@ -8,12 +8,13 @@ const MAX_SCALE = 400
 export default function PendulumCanvas({ latest, params }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
-  const stateRef = useRef({ theta: 0, phi_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0 })
+  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, trail: [] })
   const dimsRef = useRef({ armLength: 70, wheelRadius: 12 })
 
   useEffect(() => {
     if (latest) {
       stateRef.current.theta = latest.theta
+      stateRef.current.theta_dot = latest.theta_dot ?? 0
       stateRef.current.phi_dot = latest.phi_dot
       stateRef.current.voltage = latest.voltage ?? 0
       stateRef.current.current = latest.current ?? 0
@@ -62,7 +63,7 @@ export default function PendulumCanvas({ latest, params }) {
       const armLength = dimsRef.current.armLength * scaleFactor
       const wheelRadius = dimsRef.current.wheelRadius * scaleFactor
 
-      const { theta, phi_dot, voltage, current } = stateRef.current
+      const { theta, theta_dot, phi_dot, voltage, current } = stateRef.current
 
       const dt = stateRef.current.lastTime > 0
         ? Math.min((timestamp - stateRef.current.lastTime) / 1000, 0.05)
@@ -74,10 +75,53 @@ export default function PendulumCanvas({ latest, params }) {
       const tipX = cx + armLength * Math.sin(theta)
       const tipY = cy - armLength * Math.cos(theta)
 
+      const trail = stateRef.current.trail
+      trail.push({ x: tipX, y: tipY })
+      if (trail.length > 28) trail.shift()
+
+      // Radial grid
+      ctx.strokeStyle = '#ffffff08'
+      ctx.lineWidth = 0.5
+      for (let r = 1; r <= 3; r++) {
+        ctx.beginPath()
+        ctx.arc(cx, cy, (armLength / 3) * r, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      for (let a = 0; a < 8; a++) {
+        const angle = (Math.PI / 4) * a
+        ctx.beginPath()
+        ctx.moveTo(cx, cy)
+        ctx.lineTo(cx + armLength * Math.cos(angle), cy + armLength * Math.sin(angle))
+        ctx.stroke()
+      }
+
+      // Ground shadow
+      const shadowScale = Math.abs(Math.sin(theta))
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.25 - shadowScale * 0.15})`
+      ctx.beginPath()
+      ctx.ellipse(cx, cy + 14, 18 + shadowScale * 12, 4, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Trail
+      for (let i = 0; i < trail.length; i++) {
+        const alpha = (i / trail.length) * 0.35
+        const radius = 1.5 + (i / trail.length) * 2
+        ctx.fillStyle = `rgba(86, 204, 242, ${alpha})`
+        ctx.beginPath()
+        ctx.arc(trail[i].x, trail[i].y, radius, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // Base
       ctx.fillStyle = '#2a2a4a'
       ctx.fillRect(cx - 16, cy, 32, 10)
 
-      ctx.strokeStyle = '#8899aa'
+      // Arm with velocity-based color
+      const speedNorm = Math.min(Math.abs(theta_dot) / 8, 1)
+      const armR = Math.round(86 + speedNorm * (235 - 86))
+      const armG = Math.round(153 + speedNorm * (87 - 153))
+      const armB = Math.round(170 + speedNorm * (87 - 170))
+      ctx.strokeStyle = `rgb(${armR}, ${armG}, ${armB})`
       ctx.lineWidth = 3.5
       ctx.lineCap = 'round'
       ctx.beginPath()
@@ -115,6 +159,25 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.arc(0, 0, 3, 0, Math.PI * 2)
       ctx.fill()
       ctx.restore()
+
+      // Speed arc around wheel
+      const maxSpeed = 30
+      const wheelSpeedNorm = Math.min(Math.abs(phi_dot) / maxSpeed, 1)
+      if (wheelSpeedNorm > 0.01) {
+        const arcRadius = wheelRadius + 5
+        const sweepAngle = wheelSpeedNorm * Math.PI * 1.8
+        const startA = -Math.PI / 2 - sweepAngle / 2
+        const endA = -Math.PI / 2 + sweepAngle / 2
+        const gR = Math.round(111 + speedNorm * (235 - 111))
+        const gG = Math.round(207 + speedNorm * (87 - 207))
+        const gB = Math.round(151 + speedNorm * (87 - 151))
+        ctx.strokeStyle = `rgba(${gR}, ${gG}, ${gB}, 0.8)`
+        ctx.lineWidth = 3
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.arc(tipX, tipY, arcRadius, startA, endA)
+        ctx.stroke()
+      }
 
       if (Math.abs(theta) > 0.01) {
         ctx.strokeStyle = '#f2994a66'
