@@ -24,6 +24,7 @@ export function useSimulationSocket() {
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
   const mountedRef = useRef(true)
+  const metricsRef = useRef({ bytes: 0, messages: 0, errors: [] })
 
   const applyDelta = useCallback((delta) => {
     const base = lastFullRef.current
@@ -97,11 +98,18 @@ export function useSimulationSocket() {
 
     ws.onmessage = (event) => {
       if (!mountedRef.current) return
+      const data = event.data
+      const byteLen = data instanceof ArrayBuffer ? data.byteLength : (data.size || 0)
+      metricsRef.current.bytes += byteLen
+      metricsRef.current.messages += 1
       try {
-        const msg = decode(new Uint8Array(event.data))
+        const msg = decode(new Uint8Array(data))
         handleMessage(msg)
-      } catch {
-        // Ignore malformed frames
+      } catch (err) {
+        metricsRef.current.errors.push({ time: Date.now(), message: `Decode error: ${err.message}` })
+        if (metricsRef.current.errors.length > 50) {
+          metricsRef.current.errors = metricsRef.current.errors.slice(-50)
+        }
       }
     }
 
@@ -113,6 +121,10 @@ export function useSimulationSocket() {
     }
 
     ws.onerror = () => {
+      metricsRef.current.errors.push({ time: Date.now(), message: 'WebSocket error' })
+      if (metricsRef.current.errors.length > 50) {
+        metricsRef.current.errors = metricsRef.current.errors.slice(-50)
+      }
       ws.close()
     }
   }, [handleMessage])
@@ -143,5 +155,7 @@ export function useSimulationSocket() {
     }
   }, [connect])
 
-  return { connected, latest, status, params, send, getBuffer, clearBuffer }
+  const getMetricsRef = useCallback(() => metricsRef, [])
+
+  return { connected, latest, status, params, send, getBuffer, clearBuffer, getMetricsRef }
 }

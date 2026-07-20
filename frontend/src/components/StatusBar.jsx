@@ -1,4 +1,4 @@
-import { fmtTime } from '../utils/format'
+import { fmtTime, fmtBytes } from '../utils/format'
 
 const MODE_LABELS = {
   none: 'No Control',
@@ -15,7 +15,7 @@ const STATUS_LABELS = {
   paused: 'Paused',
 }
 
-export default function StatusBar({ status, connected, warnings }) {
+export default function StatusBar({ status, connected, warnings, fps, bytesPerSec, msgsPerSec }) {
   const statusText = status ? STATUS_LABELS[status.status] || status.status : '—'
   const modeText = status ? MODE_LABELS[status.control_mode] || status.control_mode : '—'
   const timeText = status ? fmtTime(status.time) : '0:00.000'
@@ -49,6 +49,18 @@ export default function StatusBar({ status, connected, warnings }) {
           <span className="status-value">{status.speed_multiplier.toFixed(1)}×</span>
         </div>
       )}
+      <div className="status-item">
+        <span className="status-label">FPS:</span>
+        <span className={`status-value mono ${fps < 30 ? 'status-warning' : ''}`}>{fps}</span>
+      </div>
+      <div className="status-item">
+        <span className="status-label">Net:</span>
+        <span className="status-value mono">{fmtBytes(bytesPerSec)}/s</span>
+      </div>
+      <div className="status-item">
+        <span className="status-label">Msg:</span>
+        <span className="status-value mono">{msgsPerSec}/s</span>
+      </div>
       {warnings && warnings.length > 0 && (
         <div className="status-item status-warning">
           <span>⚠ {warnings[0]}</span>

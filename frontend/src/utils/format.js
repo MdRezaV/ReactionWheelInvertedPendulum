@@ -13,6 +13,12 @@ export function fmt(value, decimals = 3) {
 /**
  * Format simulation time as mm:ss.mmm
  */
+export function fmtBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
 export function fmtTime(seconds) {
   if (seconds == null) return '0:00.000'
   const mins = Math.floor(seconds / 60)
