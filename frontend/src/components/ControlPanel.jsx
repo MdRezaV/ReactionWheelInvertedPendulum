@@ -10,7 +10,7 @@ const CONTROL_MODES = [
   { value: 'lqr', label: 'تعادل LQR' },
   { value: 'energy_swing_up', label: 'نوسان انرژی' },
   { value: 'sliding_mode', label: 'مد لغزشی' },
-  { value: 'manual', label: 'گشتاور دستی' },
+  { value: 'manual', label: 'ورودی دستی' },
 ]
 
 const SIM_PARAMS = [
@@ -146,7 +146,7 @@ export default function ControlPanel({
             </Select.Root>
           </div>
 
-          {status?.control_mode === 'manual' && (
+          {selectedMode === 'manual' && (
             <div className="flex flex-col gap-1">
               <label className="text-[13px] text-text-dim font-bold">
                 ولتاژ دستی: <span className="text-accent font-mono">{toPersianDigits(manualTorque.toFixed(1))} ولت</span>

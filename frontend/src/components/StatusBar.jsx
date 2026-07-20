@@ -6,7 +6,7 @@ const MODE_LABELS = {
   lqr: 'تعادل LQR',
   energy_swing_up: 'نوسان انرژی',
   sliding_mode: 'مد لغزشی',
-  manual: 'گشتاور دستی',
+  manual: 'ورودی دستی',
 }
 
 const STATUS_LABELS = {
