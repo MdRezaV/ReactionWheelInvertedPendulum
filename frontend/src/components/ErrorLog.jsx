@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { toPersianDigits } from '../utils/format'
 
 const MAX_VISIBLE = 50
 
 function formatTimestamp(ts) {
   const d = new Date(ts)
-  return d.toLocaleTimeString('fa-IR', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
+  return toPersianDigits(d.toLocaleTimeString('fa-IR', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0'))
 }
 
 export default function ErrorLog({ errors, onClear }) {

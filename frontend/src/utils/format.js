@@ -2,28 +2,37 @@
  * Formatting utilities for display values.
  */
 
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
+
 /**
- * Format a number to a fixed number of decimal places.
+ * Convert all Western digits in a string to Persian digits.
+ */
+export function toPersianDigits(str) {
+  return String(str).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[parseInt(d)])
+}
+
+/**
+ * Format a number to a fixed number of decimal places (Persian digits).
  */
 export function fmt(value, decimals = 3) {
   if (value == null || Number.isNaN(value)) return '—'
-  return value.toFixed(decimals)
+  return toPersianDigits(value.toFixed(decimals))
 }
 
 /**
  * Format simulation time as mm:ss.mmm
  */
 export function fmtBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  if (bytes < 1024) return `${toPersianDigits(bytes)} بایت`
+  if (bytes < 1024 * 1024) return `${toPersianDigits((bytes / 1024).toFixed(1))} کیلوبایت`
+  return `${toPersianDigits((bytes / (1024 * 1024)).toFixed(2))} مگابایت`
 }
 
 export function fmtTime(seconds) {
-  if (seconds == null) return '0:00.000'
+  if (seconds == null) return '۰:۰۰.۰۰۰'
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
-  return `${mins}:${secs.toFixed(3).padStart(6, '0')}`
+  return toPersianDigits(`${mins}:${secs.toFixed(3).padStart(6, '0')}`)
 }
 
 /**

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { toPersianDigits } from '../utils/format'
 
 const SERIES_CONFIG = [
   { key: 'theta', label: 'زاویه پاندول', color: '#56ccf2' },
@@ -93,10 +94,10 @@ export default function SimulationChart({ getBuffer }) {
       }
 
       ctx.fillStyle = '#555577'
-      ctx.font = '9px monospace'
+      ctx.font = '9px Vazirmatn, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 3)
-      ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 3)
+      ctx.fillText(`${toPersianDigits(tStart.toFixed(1))}s`, PADDING.left, h - 3)
+      ctx.fillText(`${toPersianDigits(tEnd.toFixed(1))}s`, PADDING.left + plotW, h - 3)
 
       animRef.current = requestAnimationFrame(draw)
     }

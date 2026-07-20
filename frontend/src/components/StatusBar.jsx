@@ -1,4 +1,4 @@
-import { fmtTime, fmtBytes } from '../utils/format'
+import { fmtTime, fmtBytes, toPersianDigits } from '../utils/format'
 
 const MODE_LABELS = {
   none: 'بدون کنترل',
@@ -50,16 +50,16 @@ export default function StatusBar({ status, connected, warnings, fps, bytesPerSe
       <span className="text-accent font-medium">{modeText}</span>
 
       {status?.speed_multiplier && status.speed_multiplier !== 1.0 && (
-        <span className="text-warning font-mono">{status.speed_multiplier.toFixed(1)} برابر</span>
+        <span className="text-warning font-mono">{toPersianDigits(status.speed_multiplier.toFixed(1))} برابر</span>
       )}
 
       <div className="flex-1" />
 
       <div className="flex items-center gap-3 text-text-dim text-[11px]">
-        <span>{fps} فریم</span>
+        <span>{toPersianDigits(fps)} فریم</span>
         <span>{fmtBytes(bytesPerSec)}/ثانیه</span>
-        <span>{msgsPerSec} پیام/ثانیه</span>
-        <span>{clientCount} کلاینت</span>
+        <span>{toPersianDigits(msgsPerSec)} پیام/ثانیه</span>
+        <span>{toPersianDigits(clientCount)} کلاینت</span>
       </div>
 
       {warnings && warnings.length > 0 && (

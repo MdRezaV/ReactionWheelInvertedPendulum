@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toPersianDigits } from '../utils/format'
 
 const CONTROL_MODES = [
   { value: 'none', label: 'بدون کنترل' },
@@ -115,7 +116,7 @@ export default function ControlPanel({
           {status?.control_mode === 'manual' && (
             <div className="flex flex-col gap-1">
               <label className="text-[11px] text-text-dim font-bold">
-                ولتاژ دستی: <span className="text-accent font-mono">{manualTorque.toFixed(1)} ولت</span>
+                ولتاژ دستی: <span className="text-accent font-mono">{toPersianDigits(manualTorque.toFixed(1))} ولت</span>
               </label>
               <input
                 type="range" min={-12} max={12} step={0.1} value={manualTorque}
@@ -126,7 +127,7 @@ export default function ControlPanel({
 
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-text-dim font-bold">
-              سرعت شبیه‌سازی: <span className="text-accent font-mono">{speed.toFixed(1)} برابر</span>
+              سرعت شبیه‌سازی: <span className="text-accent font-mono">{toPersianDigits(speed.toFixed(1))} برابر</span>
             </label>
             <input
               type="range" min={0.1} max={5} step={0.1} value={speed}
@@ -162,12 +163,24 @@ export default function ControlPanel({
                     onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
                     className="flex-1"
                   />
-                  <input
-                    type="number" min={p.min} max={p.max} step={p.step} value={val}
-                    onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
-                    className="w-[60px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
-                    dir="ltr"
-                  />
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="number" min={p.min} max={p.max} step={p.step} value={val}
+                      onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
+                      className="w-[56px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      dir="ltr"
+                    />
+                    <div className="flex flex-col gap-px">
+                      <button
+                        onClick={() => handleParamChange('simulation', p.key, String(Math.min(val + p.step, p.max)))}
+                        className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-t cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
+                      >▲</button>
+                      <button
+                        onClick={() => handleParamChange('simulation', p.key, String(Math.max(val - p.step, p.min)))}
+                        className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-b cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
+                      >▼</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )
@@ -188,12 +201,24 @@ export default function ControlPanel({
                     onChange={(e) => handleParamChange('control', p.key, e.target.value)}
                     className="flex-1"
                   />
-                  <input
-                    type="number" min={p.min} max={p.max} step={p.step} value={val}
-                    onChange={(e) => handleParamChange('control', p.key, e.target.value)}
-                    className="w-[60px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
-                    dir="ltr"
-                  />
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="number" min={p.min} max={p.max} step={p.step} value={val}
+                      onChange={(e) => handleParamChange('control', p.key, e.target.value)}
+                      className="w-[56px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      dir="ltr"
+                    />
+                    <div className="flex flex-col gap-px">
+                      <button
+                        onClick={() => handleParamChange('control', p.key, String(Math.min(val + p.step, p.max)))}
+                        className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-t cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
+                      >▲</button>
+                      <button
+                        onClick={() => handleParamChange('control', p.key, String(Math.max(val - p.step, p.min)))}
+                        className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-b cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
+                      >▼</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { toPersianDigits } from '../utils/format'
 
 const SERIES = [
   { key: 'kinetic_energy', label: 'جنبشی', color: '#56ccf2' },
@@ -95,10 +96,10 @@ export default function EnergyChart({ getBuffer }) {
       }
 
       ctx.fillStyle = '#555577'
-      ctx.font = '9px monospace'
+      ctx.font = '9px Vazirmatn, sans-serif'
       ctx.textAlign = 'right'
-      ctx.fillText(yMax.toFixed(1), PADDING.left - 3, PADDING.top + 8)
-      ctx.fillText(yMin.toFixed(1), PADDING.left - 3, PADDING.top + plotH)
+      ctx.fillText(toPersianDigits(yMax.toFixed(1)), PADDING.left - 3, PADDING.top + 8)
+      ctx.fillText(toPersianDigits(yMin.toFixed(1)), PADDING.left - 3, PADDING.top + plotH)
 
       animRef.current = requestAnimationFrame(draw)
     }

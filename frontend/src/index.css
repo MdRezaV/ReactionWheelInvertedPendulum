@@ -3,7 +3,7 @@
 
 @theme {
   --font-sans: 'Vazirmatn', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-mono: 'Vazirmatn', monospace;
   --color-bg: #080810;
   --color-surface: #0e0e1a;
   --color-card: #14142a;
