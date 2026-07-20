@@ -1,22 +1,24 @@
-import { fmt, fmtAngle, fmtVoltage, fmtCurrent } from '../utils/format'
+import { fmt } from '../utils/format'
+
+const RAD2DEG = 180 / Math.PI
 
 const FIELDS = [
-  { key: 'theta', label: 'θ', format: (v) => fmtAngle(v) },
-  { key: 'theta_dot', label: 'θ̇', format: (v) => `${fmt(v, 3)} rad/s` },
-  { key: 'theta_ddot', label: 'θ̈', format: (v) => `${fmt(v, 2)} rad/s²` },
-  { key: 'phi', label: 'φ', format: (v) => `${fmt(v, 3)} rad` },
-  { key: 'phi_dot', label: 'φ̇', format: (v) => `${fmt(v, 2)} rad/s` },
-  { key: 'phi_ddot', label: 'φ̈', format: (v) => `${fmt(v, 1)} rad/s²` },
-  { key: 'voltage', label: 'V', format: (v) => fmtVoltage(v) },
-  { key: 'current', label: 'i_a', format: (v) => fmtCurrent(v) },
-  { key: 'back_emf', label: 'EMF', format: (v) => `${fmt(v, 2)} V` },
-  { key: 'motor_torque', label: 'τ_m', format: (v) => `${fmt(v, 4)} N·m` },
-  { key: 'wheel_torque', label: 'τ_w', format: (v) => `${fmt(v, 4)} N·m` },
-  { key: 'energy', label: 'E', format: (v) => `${fmt(v, 4)} J` },
-  { key: 'kinetic_energy', label: 'KE', format: (v) => `${fmt(v, 4)} J` },
-  { key: 'potential_energy', label: 'PE', format: (v) => `${fmt(v, 4)} J` },
-  { key: 'angular_momentum', label: 'L', format: (v) => `${fmt(v, 4)} kg·m²/s` },
-  { key: 'time', label: 't', format: (v) => `${fmt(v, 3)} s` },
+  { key: 'theta', label: 'θ', format: (v) => `${fmt(v * RAD2DEG, 2)}°` },
+  { key: 'theta_dot', label: 'θ̇', format: (v) => `${fmt(v * RAD2DEG, 2)} °/s` },
+  { key: 'theta_ddot', label: 'θ̈', format: (v) => `${fmt(v * RAD2DEG, 1)} °/s²` },
+  { key: 'phi', label: 'φ', format: (v) => `${fmt(v * RAD2DEG, 2)}°` },
+  { key: 'phi_dot', label: 'φ̇', format: (v) => `${fmt(v * RAD2DEG, 2)} °/s` },
+  { key: 'phi_ddot', label: 'φ̈', format: (v) => `${fmt(v * RAD2DEG, 1)} °/s²` },
+  { key: 'voltage', label: 'ولتاژ', format: (v) => `${fmt(v, 2)} ولت` },
+  { key: 'current', label: 'جریان', format: (v) => `${fmt(v, 3)} آمپر` },
+  { key: 'back_emf', label: 'EMF', format: (v) => `${fmt(v, 2)} ولت` },
+  { key: 'motor_torque', label: 'τ_m', format: (v) => `${fmt(v, 4)} نیوتن·متر` },
+  { key: 'wheel_torque', label: 'τ_w', format: (v) => `${fmt(v, 4)} نیوتن·متر` },
+  { key: 'energy', label: 'انرژی', format: (v) => `${fmt(v, 4)} ژول` },
+  { key: 'kinetic_energy', label: 'جنبشی', format: (v) => `${fmt(v, 4)} ژول` },
+  { key: 'potential_energy', label: 'پتانسیل', format: (v) => `${fmt(v, 4)} ژول` },
+  { key: 'angular_momentum', label: 'L', format: (v) => `${fmt(v, 4)} کیلوگرم·متر²/ثانیه` },
+  { key: 'time', label: 'زمان', format: (v) => `${fmt(v, 3)} ثانیه` },
 ]
 
 export default function NumericReadout({ latest }) {

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES = [
-  { key: 'kinetic_energy', label: 'جنبشی (J)', color: '#4fc3f7' },
-  { key: 'potential_energy', label: 'پتانسیل (J)', color: '#ffb74d' },
-  { key: 'energy', label: 'کل (J)', color: '#81c784' },
+  { key: 'kinetic_energy', label: 'جنبشی (ژول)', color: '#4fc3f7' },
+  { key: 'potential_energy', label: 'پتانسیل (ژول)', color: '#ffb74d' },
+  { key: 'energy', label: 'کل (ژول)', color: '#81c784' },
 ]
 
 const CHART_HEIGHT = 150

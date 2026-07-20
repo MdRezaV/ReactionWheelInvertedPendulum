@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES_CONFIG = [
-  { key: 'theta', label: 'θ (rad)', color: '#4fc3f7' },
-  { key: 'theta_dot', label: 'θ̇ (rad/s)', color: '#81c784' },
-  { key: 'phi_dot', label: 'φ̇ (rad/s)', color: '#ffb74d' },
-  { key: 'torque', label: 'Torque (N·m)', color: '#e57373' },
+  { key: 'theta', label: 'θ (درجه)', color: '#4fc3f7' },
+  { key: 'theta_dot', label: 'θ̇ (درجه/ثانیه)', color: '#81c784' },
+  { key: 'phi_dot', label: 'φ̇ (درجه/ثانیه)', color: '#ffb74d' },
+  { key: 'torque', label: 'گشتاور (نیوتن·متر)', color: '#e57373' },
 ]
 
 const CHART_HEIGHT = 160

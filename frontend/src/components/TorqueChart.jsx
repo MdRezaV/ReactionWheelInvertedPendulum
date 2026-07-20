@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES = [
-  { key: 'voltage', label: 'V (V)', color: '#e57373' },
-  { key: 'current', label: 'i_a (A)', color: '#ce93d8' },
-  { key: 'phi_dot', label: 'φ̇ (rad/s)', color: '#4db6ac' },
+  { key: 'voltage', label: 'ولتاژ (ولت)', color: '#e57373' },
+  { key: 'current', label: 'جریان (آمپر)', color: '#ce93d8' },
+  { key: 'phi_dot', label: 'φ̇ (درجه/ثانیه)', color: '#4db6ac' },
 ]
 
 const CHART_HEIGHT = 150

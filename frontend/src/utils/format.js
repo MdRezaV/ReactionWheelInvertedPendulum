@@ -30,27 +30,27 @@ export function fmtTime(seconds) {
  * Format a torque value with unit.
  */
 export function fmtTorque(value) {
-  return `${fmt(value, 3)} N·m`
+  return `${fmt(value, 3)} نیوتن·متر`
 }
 
 /**
- * Format an angle in radians with degree equivalent.
+ * Format an angle (radians input) as degrees.
  */
 export function fmtAngle(rad) {
   const deg = (rad * 180) / Math.PI
-  return `${fmt(rad, 4)} rad (${fmt(deg, 1)}°)`
+  return `${fmt(deg, 2)}°`
 }
 
 /**
  * Format a voltage value with unit.
  */
 export function fmtVoltage(value) {
-  return `${fmt(value, 2)} V`
+  return `${fmt(value, 2)} ولت`
 }
 
 /**
  * Format a current value with unit.
  */
 export function fmtCurrent(value) {
-  return `${fmt(value, 3)} A`
+  return `${fmt(value, 3)} آمپر`
 }

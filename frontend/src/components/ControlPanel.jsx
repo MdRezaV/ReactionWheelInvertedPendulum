@@ -10,21 +10,21 @@ const CONTROL_MODES = [
 ]
 
 const SIM_PARAMS = [
-  { key: 'pendulum_mass', label: 'جرم پاندول', unit: 'kg', min: 0.1, max: 5, step: 0.1 },
-  { key: 'pendulum_length', label: 'طول پاندول', unit: 'm', min: 0.1, max: 2, step: 0.05 },
-  { key: 'wheel_mass', label: 'جرم چرخ', unit: 'kg', min: 0.05, max: 2, step: 0.05 },
-  { key: 'wheel_radius', label: 'شعاع چرخ', unit: 'm', min: 0.01, max: 0.2, step: 0.005 },
-  { key: 'damping', label: 'میرایی', unit: 'N·m·s', min: 0, max: 0.5, step: 0.005 },
-  { key: 'wheel_damping', label: 'میرایی چرخ', unit: 'N·m·s', min: 0, max: 0.1, step: 0.001 },
-  { key: 'gravity', label: 'گرانش', unit: 'm/s²', min: 1, max: 20, step: 0.1 },
-  { key: 'max_voltage', label: 'حداکثر ولتاژ', unit: 'V', min: 1, max: 48, step: 1 },
-  { key: 'motor_resistance', label: 'مقاومت موتور', unit: 'Ω', min: 0.1, max: 20, step: 0.1 },
-  { key: 'motor_inductance', label: 'القای موتور', unit: 'H', min: 0.0001, max: 0.1, step: 0.0001 },
-  { key: 'motor_constant', label: 'ثابت موتور', unit: 'N·m/A', min: 0.001, max: 0.5, step: 0.001 },
-  { key: 'motor_rotor_inertia', label: 'اینرسی روتور', unit: 'kg·m²', min: 1e-6, max: 0.01, step: 1e-6 },
-  { key: 'motor_viscous_friction', label: 'اصطکاک ویسکوز', unit: 'N·m·s', min: 0, max: 0.01, step: 0.0001 },
+  { key: 'pendulum_mass', label: 'جرم پاندول', unit: 'کیلوگرم', min: 0.1, max: 5, step: 0.1 },
+  { key: 'pendulum_length', label: 'طول پاندول', unit: 'متر', min: 0.1, max: 2, step: 0.05 },
+  { key: 'wheel_mass', label: 'جرم چرخ', unit: 'کیلوگرم', min: 0.05, max: 2, step: 0.05 },
+  { key: 'wheel_radius', label: 'شعاع چرخ', unit: 'متر', min: 0.01, max: 0.2, step: 0.005 },
+  { key: 'damping', label: 'میرایی', unit: 'نیوتن·متر·ثانیه', min: 0, max: 0.5, step: 0.005 },
+  { key: 'wheel_damping', label: 'میرایی چرخ', unit: 'نیوتن·متر·ثانیه', min: 0, max: 0.1, step: 0.001 },
+  { key: 'gravity', label: 'گرانش', unit: 'متر/ثانیه²', min: 1, max: 20, step: 0.1 },
+  { key: 'max_voltage', label: 'حداکثر ولتاژ', unit: 'ولت', min: 1, max: 48, step: 1 },
+  { key: 'motor_resistance', label: 'مقاومت موتور', unit: 'اهم', min: 0.1, max: 20, step: 0.1 },
+  { key: 'motor_inductance', label: 'القای موتور', unit: 'هانری', min: 0.0001, max: 0.1, step: 0.0001 },
+  { key: 'motor_constant', label: 'ثابت موتور', unit: 'نیوتن·متر/آمپر', min: 0.001, max: 0.5, step: 0.001 },
+  { key: 'motor_rotor_inertia', label: 'اینرسی روتور', unit: 'کیلوگرم·متر²', min: 1e-6, max: 0.01, step: 1e-6 },
+  { key: 'motor_viscous_friction', label: 'اصطکاک ویسکوز', unit: 'نیوتن·متر·ثانیه', min: 0, max: 0.01, step: 0.0001 },
   { key: 'gear_ratio', label: 'نسبت چرخ‌دنده', unit: '—', min: 1, max: 100, step: 1 },
-  { key: 'time_step', label: 'گام زمانی', unit: 's', min: 0.0005, max: 0.01, step: 0.0005 },
+  { key: 'time_step', label: 'گام زمانی', unit: 'ثانیه', min: 0.0005, max: 0.01, step: 0.0005 },
 ]
 
 const CTRL_PARAMS = [
@@ -52,7 +52,7 @@ const TABS = [
 ]
 
 export default function ControlPanel({
-  status, params, onStart, onStop, onPause, onResume, onReset, onStep,
+  status, params, onStart, onStop, onReset, onStep,
   onSetMode, onSetManualVoltage, onUpdateParams, onDisturbance, onSetSpeed,
 }) {
   const [activeTab, setActiveTab] = useState('controls')
@@ -60,7 +60,6 @@ export default function ControlPanel({
   const [speed, setSpeed] = useState(1.0)
 
   const isRunning = status?.status === 'running'
-  const isPaused = status?.status === 'paused'
   const isStopped = status?.status === 'stopped'
 
   const handleParamChange = (scope, key, value) => {
@@ -93,8 +92,6 @@ export default function ControlPanel({
           <div className="grid grid-cols-2 gap-2">
             <button onClick={onStart} disabled={isRunning} className={`${btnBase} border-success/40 text-success hover:bg-success/10`}>شروع</button>
             <button onClick={onStop} disabled={isStopped} className={`${btnBase} border-danger/40 text-danger hover:bg-danger/10`}>توقف</button>
-            <button onClick={onPause} disabled={!isRunning} className={`${btnBase} border-warning/40 text-warning hover:bg-warning/10`}>مکث</button>
-            <button onClick={onResume} disabled={!isPaused} className={`${btnBase} border-green/40 text-green hover:bg-green/10`}>ادامه</button>
             <button onClick={onReset} className={`${btnBase} border-warning/40 text-warning hover:bg-warning/10`}>بازنشانی</button>
             <button onClick={() => onStep(1)} className={`${btnBase} border-teal/40 text-teal hover:bg-teal/10`}>گام</button>
             <button onClick={() => onStep(10)} className={`${btnBase} border-teal/40 text-teal hover:bg-teal/10 col-span-2`}>گام ×۱۰</button>
@@ -136,7 +133,7 @@ export default function ControlPanel({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-text-dim font-semibold">اختلال</label>
+            <label className="text-xs text-text-dim font-semibold">اغتشاش</label>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onDisturbance(6, 20)} className={`${btnBase} border-purple/40 text-purple hover:bg-purple/10`}>+6V</button>
               <button onClick={() => onDisturbance(-6, 20)} className={`${btnBase} border-purple/40 text-purple hover:bg-purple/10`}>−6V</button>

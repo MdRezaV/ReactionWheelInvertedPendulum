@@ -30,8 +30,7 @@ function App() {
 
   const handleStart = useCallback(async () => { await api.start() }, [api])
   const handleStop = useCallback(async () => { await api.stop() }, [api])
-  const handlePause = useCallback(async () => { await api.pause() }, [api])
-  const handleResume = useCallback(async () => { await api.resume() }, [api])
+
   const handleReset = useCallback(async () => { await api.reset(); clearBuffer() }, [api, clearBuffer])
   const handleStep = useCallback(async (steps) => { await api.step(steps) }, [api])
   const handleSetMode = useCallback(async (mode) => { await api.setControlMode(mode) }, [api])
@@ -44,7 +43,7 @@ function App() {
 
   const handleDisturbance = useCallback(async (voltage, durationSteps) => {
     try { await api.applyDisturbance(voltage, durationSteps) }
-    catch (err) { addError(`اختلال ناموفق: ${err.message}`) }
+    catch (err) { addError(`اغتشاش ناموفق: ${err.message}`) }
   }, [api, addError])
 
   const handleSetSpeed = useCallback(async (multiplier) => {
@@ -76,8 +75,6 @@ function App() {
             params={params}
             onStart={handleStart}
             onStop={handleStop}
-            onPause={handlePause}
-            onResume={handleResume}
             onReset={handleReset}
             onStep={handleStep}
             onSetMode={handleSetMode}

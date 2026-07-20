@@ -133,9 +133,9 @@ export default function PendulumCanvas({ latest }) {
       ctx.font = '11px Vazirmatn, monospace'
       ctx.textAlign = 'left'
       ctx.fillText(`θ = ${(theta * 180 / Math.PI).toFixed(1)}°`, 8, 16)
-      ctx.fillText(`φ̇ = ${phi_dot.toFixed(1)} rad/s`, 8, 30)
-      ctx.fillText(`V = ${voltage.toFixed(2)} V`, 8, 44)
-      ctx.fillText(`i = ${current.toFixed(3)} A`, 8, 58)
+      ctx.fillText(`φ̇ = ${(phi_dot * 180 / Math.PI).toFixed(1)} °/s`, 8, 30)
+      ctx.fillText(`ولتاژ = ${voltage.toFixed(2)} ولت`, 8, 44)
+      ctx.fillText(`جریان = ${current.toFixed(3)} آمپر`, 8, 58)
 
       animRef.current = requestAnimationFrame(draw)
     }
