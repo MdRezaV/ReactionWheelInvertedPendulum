@@ -190,6 +190,57 @@ class TelemetryMessage(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Binary telemetry encoding constants
+# ---------------------------------------------------------------------------
+
+TELEMETRY_FIELD_ORDER: list[str] = [
+    "time", "theta", "theta_dot", "theta_ddot",
+    "phi", "phi_dot", "phi_ddot",
+    "voltage", "current", "back_emf",
+    "motor_torque", "wheel_torque",
+    "energy", "kinetic_energy", "potential_energy", "angular_momentum",
+    "mode",
+]
+
+MODE_TO_INT: dict[str, int] = {
+    "none": 0, "pid": 1, "lqr": 2,
+    "energy_swing_up": 3, "sliding_mode": 4, "manual": 5,
+}
+INT_TO_MODE: dict[int, str] = {v: k for k, v in MODE_TO_INT.items()}
+
+DEADBANDS: list[float] = [
+    0.0,      # time: always send
+    0.0005,   # theta
+    0.005,    # theta_dot
+    0.01,     # theta_ddot
+    0.001,    # phi
+    0.01,     # phi_dot
+    0.05,     # phi_ddot
+    0.005,    # voltage
+    0.001,    # current
+    0.005,    # back_emf
+    0.0001,   # motor_torque
+    0.001,    # wheel_torque
+    0.0005,   # energy
+    0.0005,   # kinetic_energy
+    0.0005,   # potential_energy
+    0.001,    # angular_momentum
+    0.0,      # mode: always send if changed
+]
+
+
+class StatusEvent(BaseModel):
+    """Lightweight status push sent over WebSocket on state changes."""
+    type: str = "status"
+    status: SimulationStatus
+    time: float = 0.0
+    control_mode: ControlMode = ControlMode.none
+    client_count: int = 0
+    warnings: list[str] = Field(default_factory=list)
+    speed_multiplier: float = 1.0
+
+
+# ---------------------------------------------------------------------------
 # API Request Schemas
 # ---------------------------------------------------------------------------
 

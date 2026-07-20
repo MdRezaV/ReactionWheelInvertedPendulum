@@ -280,61 +280,71 @@ class TestSpeedEndpoint:
 
 
 class TestWebSocket:
-    """WebSocket endpoint: connection, snapshot, and command validation."""
+    """WebSocket endpoint: connection, snapshot, and command validation.
+
+    The WebSocket now uses binary MessagePack frames. Tests use
+    receive_bytes + msgpack.unpackb to decode responses.
+    """
 
     async def test_connection_and_initial_snapshot(self, client: httpx.AsyncClient):
-        """Connecting should receive an immediate state snapshot."""
+        """Connecting should receive an immediate binary state snapshot."""
+        import msgpack
         from starlette.testclient import TestClient
         from main import app
 
-        # Use synchronous TestClient for WebSocket testing
         with TestClient(app) as tc:
             with tc.websocket_connect("/ws/telemetry") as ws:
-                data = ws.receive_json()
-                # Should receive either telemetry or status
-                assert "time" in data or "status" in data
+                raw = ws.receive_bytes()
+                data = msgpack.unpackb(raw, raw=False)
+                # Should receive either telemetry (t=0) or status (t=1)
+                assert data["t"] in (0, 1)
 
     async def test_command_validation_invalid_type(self, client: httpx.AsyncClient):
-        """Sending an unknown command type should return an error."""
+        """Sending an unknown command type should return a binary error."""
+        import msgpack
         from starlette.testclient import TestClient
         from main import app
 
         with TestClient(app) as tc:
             with tc.websocket_connect("/ws/telemetry") as ws:
-                # Consume initial snapshot
-                ws.receive_json()
-                # Send invalid command
+                ws.receive_bytes()
                 ws.send_json({"type": "invalid_command"})
-                response = ws.receive_json()
+                raw = ws.receive_bytes()
+                response = msgpack.unpackb(raw, raw=False)
+                assert response["t"] == 2
                 assert "error" in response
 
     async def test_command_validation_missing_type(self, client: httpx.AsyncClient):
-        """Sending a message without 'type' field should return an error."""
+        """Sending a message without 'type' field should return a binary error."""
+        import msgpack
         from starlette.testclient import TestClient
         from main import app
 
         with TestClient(app) as tc:
             with tc.websocket_connect("/ws/telemetry") as ws:
-                ws.receive_json()
+                ws.receive_bytes()
                 ws.send_json({"value": 42})
-                response = ws.receive_json()
+                raw = ws.receive_bytes()
+                response = msgpack.unpackb(raw, raw=False)
+                assert response["t"] == 2
                 assert "error" in response
 
     async def test_valid_step_command(self, client: httpx.AsyncClient):
         """A valid step command over WebSocket should be accepted."""
+        import msgpack
         from starlette.testclient import TestClient
         from main import app
 
         with TestClient(app) as tc:
             with tc.websocket_connect("/ws/telemetry") as ws:
-                ws.receive_json()
+                ws.receive_bytes()
                 ws.send_json({"type": "step", "steps": 5})
-                # The step command is processed; no error should be returned.
-                # The next message might be a telemetry broadcast or nothing
-                # depending on throttle. We just verify no error.
-                # Send another command to verify the connection is still alive.
+                # Step produces a telemetry broadcast (binary)
+                raw = ws.receive_bytes()
+                data = msgpack.unpackb(raw, raw=False)
+                assert data["t"] == 0
+                # Verify connection is still alive
                 ws.send_json({"type": "stop"})
-                # Connection should remain open (no exception raised)
 
     async def test_valid_set_manual_voltage_command(self, client: httpx.AsyncClient):
         """A valid set_manual_voltage command over WebSocket should be accepted."""
@@ -343,8 +353,7 @@ class TestWebSocket:
 
         with TestClient(app) as tc:
             with tc.websocket_connect("/ws/telemetry") as ws:
-                ws.receive_json()
+                ws.receive_bytes()
                 ws.send_json({"type": "set_manual_voltage", "voltage": 3.0})
-                # Command should be processed without error.
-                # Verify connection is still alive with a follow-up command.
+                # No error expected; verify connection alive
                 ws.send_json({"type": "stop"})

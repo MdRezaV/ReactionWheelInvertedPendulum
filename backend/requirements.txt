@@ -4,3 +4,4 @@ numpy>=2.0.0
 scipy>=1.14.0
 pydantic>=2.10.0
 websockets>=14.0
+msgpack>=1.0.0

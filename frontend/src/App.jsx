@@ -13,19 +13,9 @@ import './App.css'
 
 function App() {
   const api = useSimulationApi()
-  const { connected, latest, send, getBuffer, clearBuffer } = useSimulationSocket()
-
+  const { connected, latest, status: wsStatus, send, getBuffer, clearBuffer } = useSimulationSocket()
   const [status, setStatus] = useState(null)
   const [params, setParams] = useState(null)
-
-  const refreshStatus = useCallback(async () => {
-    try {
-      const s = await api.getStatus()
-      setStatus(s)
-    } catch {
-      // Backend may not be running
-    }
-  }, [api])
 
   const refreshParams = useCallback(async () => {
     try {
@@ -37,47 +27,43 @@ function App() {
   }, [api])
 
   useEffect(() => {
-    refreshStatus()
     refreshParams()
-    const interval = setInterval(refreshStatus, 2000)
-    return () => clearInterval(interval)
-  }, [refreshStatus, refreshParams])
+  }, [refreshParams])
+
+  useEffect(() => {
+    if (wsStatus) {
+      setStatus(wsStatus)
+    }
+  }, [wsStatus])
 
   const handleStart = useCallback(async () => {
     await api.start()
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handleStop = useCallback(async () => {
     await api.stop()
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handlePause = useCallback(async () => {
     await api.pause()
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handleResume = useCallback(async () => {
     await api.resume()
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handleReset = useCallback(async () => {
     await api.reset()
     clearBuffer()
-    refreshStatus()
-  }, [api, clearBuffer, refreshStatus])
+  }, [api, clearBuffer])
 
   const handleStep = useCallback(async (steps) => {
     await api.step(steps)
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handleSetMode = useCallback(async (mode) => {
     await api.setControlMode(mode)
-    refreshStatus()
-  }, [api, refreshStatus])
+  }, [api])
 
   const handleSetManualVoltage = useCallback(async (voltage) => {
     await api.setManualVoltage(voltage)
@@ -103,11 +89,10 @@ function App() {
   const handleSetSpeed = useCallback(async (multiplier) => {
     try {
       await api.setSpeed(multiplier)
-      refreshStatus()
     } catch {
       // Ignore
     }
-  }, [api, refreshStatus])
+  }, [api])
 
   return (
     <div className="app">

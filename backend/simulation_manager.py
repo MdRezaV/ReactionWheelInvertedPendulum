@@ -23,6 +23,7 @@ from models import (
     ParamsResponse,
     SimulationParameters,
     SimulationStatus,
+    StatusEvent,
     StatusResponse,
     TelemetryMessage,
 )
@@ -109,7 +110,9 @@ class SimulationManager:
 
     @property
     def last_telemetry(self) -> Optional[TelemetryMessage]:
-        """Most recent telemetry snapshot, or None if never produced."""
+        """Most recent telemetry snapshot, reconstructed on demand if needed."""
+        if self._last_telemetry is None and self._sim.time > 0.0:
+            self._last_telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
         return self._last_telemetry
 
     @property
@@ -166,6 +169,7 @@ class SimulationManager:
             return
         self._status = SimulationStatus.running
         self._last_iteration_time = asyncio.get_event_loop().time()
+        await self._push_status()
         logger.info("Simulation started.")
 
     async def stop(self) -> None:
@@ -173,6 +177,7 @@ class SimulationManager:
         if self._status == SimulationStatus.stopped:
             return
         self._status = SimulationStatus.stopped
+        await self._push_status()
         logger.info("Simulation stopped at t=%.4f s.", self._sim.time)
 
     async def pause(self) -> None:
@@ -180,6 +185,7 @@ class SimulationManager:
         if self._status != SimulationStatus.running:
             return
         self._status = SimulationStatus.paused
+        await self._push_status()
         logger.info("Simulation paused at t=%.4f s.", self._sim.time)
 
     async def resume(self) -> None:
@@ -188,6 +194,7 @@ class SimulationManager:
             return
         self._status = SimulationStatus.running
         self._last_iteration_time = asyncio.get_event_loop().time()
+        await self._push_status()
         logger.info("Simulation resumed at t=%.4f s.", self._sim.time)
 
     async def reset(self) -> None:
@@ -205,6 +212,7 @@ class SimulationManager:
         self._warnings.clear()
         self._disturbance_voltage = 0.0
         self._disturbance_remaining = 0
+        await self._push_status()
         logger.info("Simulation reset.")
 
     async def step(self, steps: int = 1) -> TelemetryMessage:
@@ -299,6 +307,18 @@ class SimulationManager:
         self._ctrl_manager.set_mode(mode)
         self._collect_warnings()
         logger.info("Control mode set to '%s'.", mode.value)
+
+    async def _push_status(self) -> None:
+        """Broadcast a status event to all connected WebSocket clients."""
+        event = StatusEvent(
+            status=self._status,
+            time=self._sim.time,
+            control_mode=self._ctrl_manager.mode,
+            client_count=self._ws_manager.client_count,
+            warnings=self._warnings,
+            speed_multiplier=self._speed_multiplier,
+        )
+        await self._ws_manager.broadcast_status(event)
 
     def set_manual_voltage(self, voltage: float) -> None:
         """Set the manual voltage command (used when mode is 'manual')."""
@@ -433,11 +453,16 @@ class SimulationManager:
                         should_send = False
 
                     if should_send and self._ws_manager.has_clients:
-                        telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
-                        self._last_telemetry = telemetry
-                        await self._ws_manager.broadcast_telemetry(telemetry)
+                        from models import MODE_TO_INT
+                        mode_int = MODE_TO_INT.get(self._ctrl_manager.mode.value, 0)
+                        values = self._sim.get_telemetry_values(mode_int)
+                        self._ws_manager.add_telemetry_values(values)
+                        if self._ws_manager.batch_ready:
+                            await self._ws_manager.flush_batch()
+                        # Update last_telemetry lazily (only when queried via REST/WS snapshot)
+                        self._last_telemetry = None
 
-                    self._last_iteration_time = loop.time()
+                self._last_iteration_time = loop.time()
 
                 # Pace the loop: sleep for approximately one physics step.
                 # When not running, use a longer idle sleep to reduce CPU.
@@ -456,14 +481,17 @@ class SimulationManager:
             raise
 
     def _physics_step(self) -> None:
-        """Execute a single physics step: compute voltage, integrate, update state."""
-        state = self._sim.get_state()
+        """Execute a single physics step: compute voltage, integrate, update state.
+
+        Uses direct state array access to avoid per-step dict allocation.
+        """
+        s = self._sim.state_array
         voltage = self._ctrl_manager.compute_voltage(
-            theta=state["theta"],
-            theta_dot=state["theta_dot"],
-            phi_dot=state["phi_dot"],
-            current=state["current"],
-            energy=self._sim.compute_energy(),
+            theta=float(s[0]),
+            theta_dot=float(s[1]),
+            phi_dot=float(s[3]),
+            current=float(s[4]),
+            energy=self._sim.cached_energy,
             time=self._sim.time,
         )
 

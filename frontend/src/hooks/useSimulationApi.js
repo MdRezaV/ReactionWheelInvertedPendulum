@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { decode } from '@msgpack/msgpack'
 
 const BASE = '/api/simulation'
 
@@ -11,7 +12,8 @@ async function request(path, options = {}) {
     const text = await res.text()
     throw new Error(`API ${res.status}: ${text}`)
   }
-  return res.json()
+  const buf = await res.arrayBuffer()
+  return decode(new Uint8Array(buf))
 }
 
 /**

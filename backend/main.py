@@ -13,11 +13,14 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
+import msgpack
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from config import (
     CORS_ORIGINS,
@@ -26,6 +29,18 @@ from config import (
     DEFAULT_SIMULATION_PARAMS,
     DEFAULT_TELEMETRY_RATE_HZ,
 )
+
+
+# ---------------------------------------------------------------------------
+# MessagePack response class (replaces default JSON serialization)
+# ---------------------------------------------------------------------------
+class MsgpackResponse(Response):
+    """Serializes response content as binary MessagePack instead of JSON."""
+
+    media_type = "application/x-msgpack"
+
+    def render(self, content: Any) -> bytes:
+        return msgpack.packb(content, use_bin_type=True)
 from models import (
     ControlModeRequest,
     ControlParameters,
@@ -84,6 +99,7 @@ app = FastAPI(
     title="Reaction Wheel Inverted Pendulum",
     version="0.1.0",
     lifespan=lifespan,
+    default_response_class=MsgpackResponse,
 )
 
 app.add_middleware(
@@ -205,14 +221,43 @@ async def set_speed(request: SpeedRequest) -> StatusResponse:
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket) -> None:
     await _ws_manager.connect(websocket)
+    _ws_manager.adapt_to_client_count()
     try:
-        # Send an immediate snapshot so the client has initial state.
+        # Send an immediate binary snapshot so the client has initial state.
+        from models import TELEMETRY_FIELD_ORDER, MODE_TO_INT
+
         telemetry = _sim_manager.last_telemetry
         if telemetry is not None:
-            await websocket.send_text(telemetry.model_dump_json())
+            mode_int = MODE_TO_INT.get(telemetry.mode.value, 0)
+            values = [
+                telemetry.time, telemetry.theta, telemetry.theta_dot,
+                telemetry.theta_ddot, telemetry.phi, telemetry.phi_dot,
+                telemetry.phi_ddot, telemetry.voltage, telemetry.current,
+                telemetry.back_emf, telemetry.motor_torque, telemetry.wheel_torque,
+                telemetry.energy, telemetry.kinetic_energy,
+                telemetry.potential_energy, telemetry.angular_momentum,
+                float(mode_int),
+            ]
+            snapshot = msgpack.packb(
+                {"t": 0, "full": True, "fields": TELEMETRY_FIELD_ORDER, "data": [values]},
+                use_bin_type=True,
+            )
+            await websocket.send_bytes(snapshot)
         else:
-            status = await get_status()
-            await websocket.send_text(status.model_dump_json())
+            status = _sim_manager.get_status()
+            status_payload = msgpack.packb(
+                {
+                    "t": 1,
+                    "status": status.status.value,
+                    "time": status.time,
+                    "control_mode": status.control_mode.value,
+                    "client_count": _ws_manager.client_count,
+                    "warnings": _sim_manager.warnings,
+                    "speed_multiplier": status.speed_multiplier,
+                },
+                use_bin_type=True,
+            )
+            await websocket.send_bytes(status_payload)
 
         # Command receive loop. Telemetry streaming is handled by the
         # SimulationManager background loop broadcasting to all clients.
@@ -220,23 +265,22 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
             result = await _ws_manager.receive_and_parse(websocket)
             if result is None:
                 break
-
             if isinstance(result, CommandError):
-                await websocket.send_text(
-                    json.dumps({"error": result.error})
+                await websocket.send_bytes(
+                    msgpack.packb({"t": 2, "error": result.error}, use_bin_type=True)
                 )
             elif isinstance(result, ParsedCommand):
                 try:
                     await _sim_manager.handle_ws_command(result.command)
                 except (ValueError, KeyError) as exc:
-                    await websocket.send_text(
-                        json.dumps({"error": str(exc)})
+                    await websocket.send_bytes(
+                        msgpack.packb({"t": 2, "error": str(exc)}, use_bin_type=True)
                     )
-
     except WebSocketDisconnect:
         pass
     finally:
         _ws_manager.disconnect(websocket)
+        _ws_manager.adapt_to_client_count()
 
 
 # ---------------------------------------------------------------------------

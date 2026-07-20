@@ -4,6 +4,26 @@
 DEFAULT_PHYSICS_RATE_HZ: int = 1000
 DEFAULT_TELEMETRY_RATE_HZ: int = 50
 
+# Telemetry batching: number of samples per WebSocket frame
+TELEMETRY_BATCH_SIZE: int = 5
+
+# Delta encoding: send a full frame every N batches
+DELTA_FULL_INTERVAL: int = 5
+
+# Adaptive telemetry rate thresholds (client_count -> effective Hz)
+ADAPTIVE_RATE_TABLE: dict[int, int] = {
+    1: 50,
+    2: 40,
+    3: 40,
+    4: 25,
+}
+ADAPTIVE_RATE_DEFAULT: int = 25
+
+# WebSocket compression: permessage-deflate is negotiated automatically
+# by the `websockets` library (uvicorn[standard]). Ensure startup uses:
+#   uvicorn main:app --ws-per-message-deflate
+WS_PER_MESSAGE_DEFLATE: bool = True
+
 # CORS origins for local Vite development
 CORS_ORIGINS: list[str] = [
     "http://localhost:5173",

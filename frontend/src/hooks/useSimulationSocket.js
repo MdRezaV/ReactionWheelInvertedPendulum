@@ -1,26 +1,89 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { decode } from '@msgpack/msgpack'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/telemetry`
 const MAX_BUFFER_SIZE = 600
 
+const INT_TO_MODE = ['none', 'pid', 'lqr', 'energy_swing_up', 'sliding_mode', 'manual']
+const FIELD_NAMES = ['time', 'theta', 'theta_dot', 'theta_ddot', 'phi', 'phi_dot', 'phi_ddot', 'voltage', 'current', 'back_emf', 'motor_torque', 'wheel_torque', 'energy', 'kinetic_energy', 'potential_energy', 'angular_momentum', 'mode']
+
 /**
  * Hook managing the WebSocket connection to the simulation backend.
  *
- * Maintains a rolling buffer of telemetry messages and exposes
- * connection state and a send method for commands.
+ * Receives binary MessagePack frames with batched, delta-encoded telemetry.
+ * Maintains a rolling buffer of telemetry messages and exposes connection
+ * state, latest sample, live status, and a send method for commands.
  */
 export function useSimulationSocket() {
   const [connected, setConnected] = useState(false)
   const [latest, setLatest] = useState(null)
+  const [status, setStatus] = useState(null)
   const bufferRef = useRef([])
+  const lastFullRef = useRef(null)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
   const mountedRef = useRef(true)
+
+  const applyDelta = useCallback((delta) => {
+    const base = lastFullRef.current
+    if (!base) return null
+    const sample = [...base]
+    for (const [idx, val] of delta) {
+      sample[idx] = val
+    }
+    return sample
+  }, [])
+
+  const sampleToObject = useCallback((arr) => {
+    const obj = {}
+    for (let i = 0; i < 16; i++) {
+      obj[FIELD_NAMES[i]] = arr[i]
+    }
+    obj.mode = INT_TO_MODE[arr[16]] || 'none'
+    return obj
+  }, [])
+
+  const handleMessage = useCallback((msg) => {
+    if (msg.t === 0) {
+      if (msg.full) {
+        for (const sample of msg.data) {
+          lastFullRef.current = sample
+          const obj = sampleToObject(sample)
+          if (!Number.isFinite(obj.theta) || !Number.isFinite(obj.theta_dot)) continue
+          bufferRef.current.push(obj)
+          setLatest(obj)
+        }
+      } else {
+        for (const delta of msg.data) {
+          const sample = applyDelta(delta)
+          if (!sample) continue
+          lastFullRef.current = sample
+          const obj = sampleToObject(sample)
+          if (!Number.isFinite(obj.theta) || !Number.isFinite(obj.theta_dot)) continue
+          bufferRef.current.push(obj)
+          setLatest(obj)
+        }
+      }
+      if (bufferRef.current.length > MAX_BUFFER_SIZE) {
+        bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_SIZE)
+      }
+    } else if (msg.t === 1) {
+      setStatus({
+        status: msg.status,
+        time: msg.time,
+        control_mode: msg.control_mode,
+        client_count: msg.client_count,
+        warnings: msg.warnings || [],
+        speed_multiplier: msg.speed_multiplier ?? 1.0,
+      })
+    }
+  }, [applyDelta, sampleToObject])
 
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
 
     const ws = new WebSocket(WS_URL)
+    ws.binaryType = 'arraybuffer'
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -31,19 +94,10 @@ export function useSimulationSocket() {
     ws.onmessage = (event) => {
       if (!mountedRef.current) return
       try {
-        const data = JSON.parse(event.data)
-        if (data.theta !== undefined) {
-          if (!Number.isFinite(data.theta) || !Number.isFinite(data.theta_dot)) {
-            return
-          }
-          bufferRef.current.push(data)
-          if (bufferRef.current.length > MAX_BUFFER_SIZE) {
-            bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_SIZE)
-          }
-          setLatest(data)
-        }
+        const msg = decode(new Uint8Array(event.data))
+        handleMessage(msg)
       } catch {
-        // Ignore non-telemetry messages (e.g. status snapshots, errors)
+        // Ignore malformed frames
       }
     }
 
@@ -57,7 +111,7 @@ export function useSimulationSocket() {
     ws.onerror = () => {
       ws.close()
     }
-  }, [])
+  }, [handleMessage])
 
   const send = useCallback((command) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -69,6 +123,7 @@ export function useSimulationSocket() {
 
   const clearBuffer = useCallback(() => {
     bufferRef.current = []
+    lastFullRef.current = null
   }, [])
 
   useEffect(() => {
@@ -84,5 +139,5 @@ export function useSimulationSocket() {
     }
   }, [connect])
 
-  return { connected, latest, send, getBuffer, clearBuffer }
+  return { connected, latest, status, send, getBuffer, clearBuffer }
 }

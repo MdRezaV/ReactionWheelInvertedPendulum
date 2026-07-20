@@ -48,12 +48,17 @@ class Simulation:
         self._last_current: float = 0.0
         self._last_theta_ddot: float = 0.0
         self._last_phi_ddot: float = 0.0
-
+        self._last_energy: float = 0.0
         self._compute_effective_quantities()
         self._validate_physical_quantities()
-
         # State vector: [theta, theta_dot, phi, phi_dot, i_a]
         self._state: np.ndarray = np.zeros(5, dtype=np.float64)
+        # Pre-allocated RK4 buffers (avoids 4 array allocations per step)
+        self._k1: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._k2: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._k3: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._k4: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._tmp: np.ndarray = np.zeros(5, dtype=np.float64)
         self.reset()
 
     # ------------------------------------------------------------------
@@ -177,6 +182,63 @@ class Simulation:
             "current": float(self._state[4]),
         }
 
+    @property
+    def state_array(self) -> np.ndarray:
+        """Direct reference to the internal state array (no copy, read-only use)."""
+        return self._state
+
+    @property
+    def cached_energy(self) -> float:
+        """Energy computed during the last step() call (avoids recomputation)."""
+        return self._last_energy
+
+    def get_telemetry_values(self, mode_int: int) -> list[float]:
+        """Return telemetry as a flat list matching TELEMETRY_FIELD_ORDER (zero Pydantic overhead).
+
+        Parameters
+        ----------
+        mode_int : int
+            Integer-encoded control mode.
+
+        Returns
+        -------
+        list[float]
+            17-element list: [time, theta, theta_dot, theta_ddot, phi, phi_dot,
+            phi_ddot, voltage, current, back_emf, motor_torque, wheel_torque,
+            energy, kinetic_energy, potential_energy, angular_momentum, mode].
+        """
+        s = self._state
+        phi_dot = float(s[3])
+        i_a = float(s[4])
+        back_emf = self._Ke * self._N * phi_dot
+        motor_torque = self._Kt * i_a
+        wheel_torque = self._N * self._Kt * i_a
+        ke = 0.5 * (
+            self._M11 * s[1] ** 2
+            + 2.0 * self._M12 * s[1] * phi_dot
+            + self._M22 * phi_dot ** 2
+        )
+        pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
+        return [
+            self._time,
+            float(s[0]),
+            float(s[1]),
+            self._last_theta_ddot,
+            float(s[2]),
+            phi_dot,
+            self._last_phi_ddot,
+            self._last_voltage,
+            i_a,
+            back_emf,
+            motor_torque,
+            wheel_torque,
+            self._last_energy,
+            float(ke),
+            float(pe),
+            float(self._M11 * s[1] + self._M12 * phi_dot),
+            float(mode_int),
+        ]
+
     def get_telemetry(self, mode: ControlMode) -> TelemetryMessage:
         """Return a telemetry-ready snapshot of the simulation."""
         ke, pe = self._compute_energy_components()
@@ -209,12 +271,10 @@ class Simulation:
     def compute_energy(self) -> float:
         """Compute total mechanical energy (kinetic + potential).
 
-        Kinetic energy uses the full coupled inertia matrix (including
-        reflected motor rotor inertia). Potential energy is referenced
-        so that the upright position (theta = 0) has zero potential energy.
+        Returns the cached value from the last step() if available,
+        avoiding redundant computation within the same physics tick.
         """
-        ke, pe = self._compute_energy_components()
-        return ke + pe
+        return self._last_energy
 
     def _compute_energy_components(self) -> tuple[float, float]:
         """Compute kinetic and potential energy separately."""
@@ -287,8 +347,44 @@ class Simulation:
 
         return np.array([theta_dot, theta_ddot, phi_dot, phi_ddot, di_a_dt], dtype=np.float64)
 
+    def _compute_dynamics_into(self, state: np.ndarray, voltage: float, out: np.ndarray) -> None:
+        """Compute state derivative into a pre-allocated output array (zero-alloc hot path).
+
+        Parameters
+        ----------
+        state : np.ndarray
+            State vector [theta, theta_dot, phi, phi_dot, i_a].
+        voltage : float
+            Armature voltage applied to the motor (saturated internally).
+        out : np.ndarray
+            Pre-allocated output array to write derivatives into.
+        """
+        theta = state[0]
+        theta_dot = state[1]
+        phi_dot = state[3]
+        i_a = state[4]
+
+        v = float(np.clip(voltage, -self._params.max_voltage, self._params.max_voltage))
+        torque_wheel = self._N * self._Kt * i_a
+
+        f1 = (
+            self._gravity_coeff * np.sin(theta)
+            - torque_wheel
+            - self._params.damping * theta_dot
+        )
+        f2 = torque_wheel - self._b_w_eff * phi_dot
+
+        det = self._M11 * self._M22 - self._M12 ** 2
+        out[0] = theta_dot
+        out[1] = (self._M22 * f1 - self._M12 * f2) / det
+        out[2] = phi_dot
+        out[3] = (self._M11 * f2 - self._M12 * f1) / det
+        out[4] = (v - self._R * i_a - self._Ke * self._N * phi_dot) / self._L
+
     def step(self, voltage: float) -> None:
         """Advance the simulation by one fixed time step using RK4.
+
+        Uses pre-allocated buffers to avoid per-step array allocations.
 
         Parameters
         ----------
@@ -301,22 +397,59 @@ class Simulation:
         )
 
         s = self._state
-        k1 = self.compute_dynamics(s, voltage)
-        k2 = self.compute_dynamics(s + 0.5 * dt * k1, voltage)
-        k3 = self.compute_dynamics(s + 0.5 * dt * k2, voltage)
-        k4 = self.compute_dynamics(s + dt * k3, voltage)
+        k1, k2, k3, k4, tmp = self._k1, self._k2, self._k3, self._k4, self._tmp
 
-        self._state = s + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        self._compute_dynamics_into(s, voltage, k1)
+
+        # tmp = s + 0.5*dt*k1
+        tmp[0] = s[0] + 0.5 * dt * k1[0]
+        tmp[1] = s[1] + 0.5 * dt * k1[1]
+        tmp[2] = s[2] + 0.5 * dt * k1[2]
+        tmp[3] = s[3] + 0.5 * dt * k1[3]
+        tmp[4] = s[4] + 0.5 * dt * k1[4]
+        self._compute_dynamics_into(tmp, voltage, k2)
+
+        # tmp = s + 0.5*dt*k2
+        tmp[0] = s[0] + 0.5 * dt * k2[0]
+        tmp[1] = s[1] + 0.5 * dt * k2[1]
+        tmp[2] = s[2] + 0.5 * dt * k2[2]
+        tmp[3] = s[3] + 0.5 * dt * k2[3]
+        tmp[4] = s[4] + 0.5 * dt * k2[4]
+        self._compute_dynamics_into(tmp, voltage, k3)
+
+        # tmp = s + dt*k3
+        tmp[0] = s[0] + dt * k3[0]
+        tmp[1] = s[1] + dt * k3[1]
+        tmp[2] = s[2] + dt * k3[2]
+        tmp[3] = s[3] + dt * k3[3]
+        tmp[4] = s[4] + dt * k3[4]
+        self._compute_dynamics_into(tmp, voltage, k4)
+
+        # s += (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+        coeff = dt / 6.0
+        s[0] += coeff * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
+        s[1] += coeff * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
+        s[2] += coeff * (k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2])
+        s[3] += coeff * (k1[3] + 2.0 * k2[3] + 2.0 * k3[3] + k4[3])
+        s[4] += coeff * (k1[4] + 2.0 * k2[4] + 2.0 * k3[4] + k4[4])
 
         # Store quantities from the final RK4 evaluation for telemetry
         self._last_theta_ddot = float(k4[1])
         self._last_phi_ddot = float(k4[3])
-        self._last_current = float(self._state[4])
+        self._last_current = float(s[4])
+
+        # Cache energy for this step (avoids recomputation in controller + telemetry)
+        ke = 0.5 * (
+            self._M11 * s[1] ** 2
+            + 2.0 * self._M12 * s[1] * s[3]
+            + self._M22 * s[3] ** 2
+        )
+        pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
+        self._last_energy = float(ke + pe)
 
         # Normalize angles
-        self._state[0] = _wrap_angle(self._state[0])
-        self._state[2] = _wrap_angle(self._state[2])
-
+        s[0] = _wrap_angle(s[0])
+        s[2] = _wrap_angle(s[2])
         self._time += dt
 
     def apply_impulse(self, voltage: float, duration_steps: int) -> None:
