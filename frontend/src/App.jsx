@@ -6,7 +6,6 @@ import ControlPanel from './components/ControlPanel'
 import SimulationChart from './components/SimulationChart'
 import EnergyChart from './components/EnergyChart'
 import TorqueChart from './components/TorqueChart'
-import PhasePlot from './components/PhasePlot'
 import PendulumCanvas from './components/PendulumCanvas'
 import NumericReadout from './components/NumericReadout'
 import StatusBar from './components/StatusBar'
@@ -30,7 +29,6 @@ function App() {
 
   const handleStart = useCallback(async () => { await api.start() }, [api])
   const handleStop = useCallback(async () => { await api.stop() }, [api])
-
   const handleReset = useCallback(async () => { await api.reset(); clearBuffer() }, [api, clearBuffer])
   const handleStep = useCallback(async (steps) => { await api.step(steps) }, [api])
   const handleSetMode = useCallback(async (mode) => { await api.setControlMode(mode) }, [api])
@@ -53,12 +51,6 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg font-sans">
-      <header className="px-6 py-3 border-b border-border flex-shrink-0 bg-surface/80 backdrop-blur-sm">
-        <h1 className="text-lg font-bold text-text-h tracking-tight">
-          پاندول معکوس چرخ عکس‌العملی
-        </h1>
-      </header>
-
       <StatusBar
         status={status}
         connected={connected}
@@ -69,7 +61,7 @@ function App() {
       />
 
       <main className="flex flex-1 overflow-hidden">
-        <aside className="w-[310px] border-l border-border overflow-y-auto flex-shrink-0 bg-surface/50">
+        <aside className="w-[272px] border-l border-border overflow-y-auto flex-shrink-0 bg-surface/40">
           <ControlPanel
             status={status}
             params={params}
@@ -85,18 +77,18 @@ function App() {
           />
         </aside>
 
-        <section className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-          <div className="flex gap-4 flex-wrap">
-            <PendulumCanvas latest={latest} params={params} />
-            <PhasePlot getBuffer={getBuffer} />
+        <div className="flex flex-1 overflow-hidden">
+          <section className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
             <NumericReadout latest={latest} />
-          </div>
-          <SimulationChart getBuffer={getBuffer} />
-          <div className="flex gap-4 flex-wrap">
             <EnergyChart getBuffer={getBuffer} />
             <TorqueChart getBuffer={getBuffer} />
-          </div>
-        </section>
+            <SimulationChart getBuffer={getBuffer} />
+          </section>
+
+          <section className="flex-1 flex flex-col border-r border-border p-3 min-h-0">
+            <PendulumCanvas latest={latest} params={params} />
+          </section>
+        </div>
       </main>
 
       <ErrorLog errors={errors} onClear={clearErrors} />

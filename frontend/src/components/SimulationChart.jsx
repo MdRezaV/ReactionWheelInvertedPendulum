@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES_CONFIG = [
-  { key: 'theta', label: 'θ (درجه)', color: '#4fc3f7' },
-  { key: 'theta_dot', label: 'θ̇ (درجه/ثانیه)', color: '#81c784' },
-  { key: 'phi_dot', label: 'φ̇ (درجه/ثانیه)', color: '#ffb74d' },
-  { key: 'torque', label: 'گشتاور (نیوتن·متر)', color: '#e57373' },
+  { key: 'theta', label: 'زاویه پاندول', color: '#56ccf2' },
+  { key: 'theta_dot', label: 'سرعت پاندول', color: '#6fcf97' },
+  { key: 'phi_dot', label: 'سرعت چرخ', color: '#f2994a' },
+  { key: 'torque', label: 'گشتاور', color: '#eb5757' },
 ]
 
-const CHART_HEIGHT = 160
-const PADDING = { top: 10, right: 10, bottom: 20, left: 50 }
+const CHART_HEIGHT = 130
+const PADDING = { top: 8, right: 8, bottom: 16, left: 44 }
 const MIN_FRAME_MS = 33
 
 export default function SimulationChart({ getBuffer }) {
@@ -44,10 +44,10 @@ export default function SimulationChart({ getBuffer }) {
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
-      ctx.fillStyle = '#12121f'
+      ctx.fillStyle = '#0c0c1a'
       ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH)
 
-      ctx.strokeStyle = '#2a2a4a'
+      ctx.strokeStyle = '#1e1e3a'
       ctx.lineWidth = 0.5
       for (let i = 0; i <= 4; i++) {
         const y = PADDING.top + (plotH / 4) * i
@@ -80,7 +80,7 @@ export default function SimulationChart({ getBuffer }) {
         const yRange = yMax - yMin || 1
 
         ctx.strokeStyle = series.color
-        ctx.lineWidth = 1.5
+        ctx.lineWidth = 1.2
         ctx.beginPath()
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
@@ -92,15 +92,11 @@ export default function SimulationChart({ getBuffer }) {
         ctx.stroke()
       }
 
-      ctx.fillStyle = '#666'
-      ctx.font = '9px Vazirmatn, monospace'
-      ctx.textAlign = 'right'
-      ctx.fillText('auto', PADDING.left - 4, PADDING.top + 8)
-      ctx.fillText('scale', PADDING.left - 4, PADDING.top + plotH - 2)
-
+      ctx.fillStyle = '#555577'
+      ctx.font = '9px monospace'
       ctx.textAlign = 'center'
-      ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 4)
-      ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 4)
+      ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 3)
+      ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 3)
 
       animRef.current = requestAnimationFrame(draw)
     }
@@ -110,13 +106,13 @@ export default function SimulationChart({ getBuffer }) {
   }, [getBuffer])
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-card">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-        <h3 className="text-[13px] font-bold text-text-h">سری زمانی</h3>
-        <div className="flex gap-3 flex-wrap">
+    <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+        <h3 className="text-[11px] font-bold text-text-dim">سری زمانی</h3>
+        <div className="flex gap-2.5">
           {SERIES_CONFIG.map((s) => (
-            <span key={s.key} className="flex items-center gap-1 text-[11px] text-text-dim">
-              <span className="w-2.5 h-[3px] rounded-full" style={{ background: s.color }} />
+            <span key={s.key} className="flex items-center gap-1 text-[10px] text-text-dim">
+              <span className="w-2 h-[2px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
           ))}

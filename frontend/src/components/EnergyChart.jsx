@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES = [
-  { key: 'kinetic_energy', label: 'جنبشی (ژول)', color: '#4fc3f7' },
-  { key: 'potential_energy', label: 'پتانسیل (ژول)', color: '#ffb74d' },
-  { key: 'energy', label: 'کل (ژول)', color: '#81c784' },
+  { key: 'kinetic_energy', label: 'جنبشی', color: '#56ccf2' },
+  { key: 'potential_energy', label: 'پتانسیل', color: '#f2994a' },
+  { key: 'energy', label: 'کل', color: '#6fcf97' },
 ]
 
-const CHART_HEIGHT = 150
-const PADDING = { top: 10, right: 10, bottom: 20, left: 55 }
+const CHART_HEIGHT = 120
+const PADDING = { top: 8, right: 8, bottom: 16, left: 44 }
 const MIN_FRAME_MS = 33
 
 export default function EnergyChart({ getBuffer }) {
@@ -43,13 +43,13 @@ export default function EnergyChart({ getBuffer }) {
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
-      ctx.fillStyle = '#12121f'
+      ctx.fillStyle = '#0c0c1a'
       ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH)
 
-      ctx.strokeStyle = '#2a2a4a'
+      ctx.strokeStyle = '#1e1e3a'
       ctx.lineWidth = 0.5
-      for (let i = 0; i <= 4; i++) {
-        const y = PADDING.top + (plotH / 4) * i
+      for (let i = 0; i <= 3; i++) {
+        const y = PADDING.top + (plotH / 3) * i
         ctx.beginPath()
         ctx.moveTo(PADDING.left, y)
         ctx.lineTo(PADDING.left + plotW, y)
@@ -79,21 +79,9 @@ export default function EnergyChart({ getBuffer }) {
       yMax += yPad
       const yRange = yMax - yMin || 1
 
-      if (yMin < 0 && yMax > 0) {
-        const zeroY = PADDING.top + plotH - ((0 - yMin) / yRange) * plotH
-        ctx.strokeStyle = '#ffffff33'
-        ctx.lineWidth = 1
-        ctx.setLineDash([3, 3])
-        ctx.beginPath()
-        ctx.moveTo(PADDING.left, zeroY)
-        ctx.lineTo(PADDING.left + plotW, zeroY)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-
       for (const series of SERIES) {
         ctx.strokeStyle = series.color
-        ctx.lineWidth = 1.5
+        ctx.lineWidth = 1.2
         ctx.beginPath()
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
@@ -106,18 +94,11 @@ export default function EnergyChart({ getBuffer }) {
         ctx.stroke()
       }
 
-      ctx.fillStyle = '#888'
-      ctx.font = '10px Vazirmatn, monospace'
+      ctx.fillStyle = '#555577'
+      ctx.font = '9px monospace'
       ctx.textAlign = 'right'
-      for (let i = 0; i <= 4; i++) {
-        const val = yMin + (yRange / 4) * (4 - i)
-        const y = PADDING.top + (plotH / 4) * i
-        ctx.fillText(val.toFixed(2), PADDING.left - 4, y + 3)
-      }
-
-      ctx.textAlign = 'center'
-      ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 4)
-      ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 4)
+      ctx.fillText(yMax.toFixed(1), PADDING.left - 3, PADDING.top + 8)
+      ctx.fillText(yMin.toFixed(1), PADDING.left - 3, PADDING.top + plotH)
 
       animRef.current = requestAnimationFrame(draw)
     }
@@ -127,13 +108,13 @@ export default function EnergyChart({ getBuffer }) {
   }, [getBuffer])
 
   return (
-    <div className="flex-1 min-w-[240px] rounded-xl border border-border bg-card overflow-hidden shadow-card">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-        <h3 className="text-[13px] font-bold text-text-h">انرژی</h3>
-        <div className="flex gap-3 flex-wrap">
+    <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+        <h3 className="text-[11px] font-bold text-text-dim">انرژی</h3>
+        <div className="flex gap-2">
           {SERIES.map((s) => (
-            <span key={s.key} className="flex items-center gap-1 text-[11px] text-text-dim">
-              <span className="w-2.5 h-[3px] rounded-full" style={{ background: s.color }} />
+            <span key={s.key} className="flex items-center gap-1 text-[10px] text-text-dim">
+              <span className="w-2 h-[2px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
           ))}

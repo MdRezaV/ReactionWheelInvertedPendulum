@@ -24,57 +24,47 @@ const STATUS_COLORS = {
 export default function StatusBar({ status, connected, warnings, fps, bytesPerSec, msgsPerSec }) {
   const statusText = status ? STATUS_LABELS[status.status] || status.status : '—'
   const modeText = status ? MODE_LABELS[status.control_mode] || status.control_mode : '—'
-  const timeText = status ? fmtTime(status.time) : '0:00.000'
+  const timeText = status ? fmtTime(status.time) : '۰:۰۰'
   const clientCount = status ? status.client_count : 0
   const statusColor = STATUS_COLORS[status?.status] || 'text-text-dim'
 
   return (
-    <div className="flex items-center gap-5 px-6 py-2 border-b border-border text-[13px] flex-shrink-0 flex-wrap bg-surface/60 backdrop-blur-sm">
-      <div className="flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-success shadow-[0_0_6px_#4caf50]' : 'bg-danger shadow-[0_0_6px_#f44336]'}`} />
+    <header className="flex items-center gap-4 px-4 py-1.5 border-b border-border flex-shrink-0 bg-surface/70 backdrop-blur-md text-[12px]">
+      <h1 className="text-[13px] font-bold text-text-h tracking-tight whitespace-nowrap">
+        پاندول معکوس چرخ عکس‌العملی
+      </h1>
+
+      <div className="w-px h-4 bg-border" />
+
+      <div className="flex items-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-success shadow-[0_0_5px_#6fcf97]' : 'bg-danger shadow-[0_0_5px_#eb5757]'}`} />
         <span className={connected ? 'text-success' : 'text-danger'}>
           {connected ? 'متصل' : 'قطع'}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">شبیه‌سازی:</span>
-        <span className={`font-medium ${statusColor}`}>{statusText}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">زمان:</span>
-        <span className="font-mono text-text-h">{timeText}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">حالت:</span>
-        <span className="text-text-h font-medium">{modeText}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">کلاینت:</span>
-        <span className="text-text-h">{clientCount}</span>
-      </div>
+
+      <div className="w-px h-4 bg-border" />
+
+      <span className={`font-semibold ${statusColor}`}>{statusText}</span>
+      <span className="font-mono text-text-h">{timeText}</span>
+      <span className="text-accent font-medium">{modeText}</span>
+
       {status?.speed_multiplier && status.speed_multiplier !== 1.0 && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-text-dim">سرعت:</span>
-          <span className="text-text-h">{status.speed_multiplier.toFixed(1)}×</span>
-        </div>
+        <span className="text-warning font-mono">{status.speed_multiplier.toFixed(1)} برابر</span>
       )}
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">فریم:</span>
-        <span className={`font-mono ${fps < 30 ? 'text-warning' : 'text-text-h'}`}>{fps}</span>
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-3 text-text-dim text-[11px]">
+        <span>{fps} فریم</span>
+        <span>{fmtBytes(bytesPerSec)}/ثانیه</span>
+        <span>{msgsPerSec} پیام/ثانیه</span>
+        <span>{clientCount} کلاینت</span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">شبکه:</span>
-        <span className="font-mono text-text-h">{fmtBytes(bytesPerSec)}/s</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-text-dim">پیام:</span>
-        <span className="font-mono text-text-h">{msgsPerSec}/s</span>
-      </div>
+
       {warnings && warnings.length > 0 && (
-        <div className="flex items-center gap-1.5 text-warning text-xs">
-          <span>⚠ {warnings[0]}</span>
-        </div>
+        <span className="text-warning text-[11px]">هشدار: {warnings[0]}</span>
       )}
-    </div>
+    </header>
   )
 }

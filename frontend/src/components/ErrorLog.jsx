@@ -22,35 +22,35 @@ export default function ErrorLog({ errors, onClear }) {
   const count = errors.length
 
   return (
-    <div className="border-t border-border flex-shrink-0 text-xs bg-surface/80 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-6 py-1.5 cursor-pointer select-none hover:bg-white/[0.03] transition-colors" onClick={toggle}>
-        <span className="flex items-center gap-2 font-bold text-text-dim">
+    <div className="border-t border-border flex-shrink-0 text-[11px] bg-surface/60 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-1 cursor-pointer select-none hover:bg-white/[0.02] transition-colors" onClick={toggle}>
+        <span className="flex items-center gap-1.5 font-bold text-text-dim">
           خطاها
           {count > 0 && (
-            <span className="bg-danger text-white text-[10px] font-bold px-1.5 py-px rounded-full min-w-[18px] text-center">
-              {count > 99 ? '۹۹+' : count}
+            <span className="bg-danger text-white text-[9px] font-bold px-1 py-px rounded-full min-w-[14px] text-center">
+              {count > 99 ? '99+' : count}
             </span>
           )}
         </span>
-        <span className="text-text-dim text-[10px]">{collapsed ? '◀' : '▼'}</span>
+        <span className="text-text-dim text-[9px]">{collapsed ? '▲' : '▼'}</span>
       </div>
       {!collapsed && (
-        <div className="border-t border-border max-h-[160px] flex flex-col">
+        <div className="border-t border-border max-h-[120px] flex flex-col">
           {count === 0 ? (
-            <div className="px-4 py-2 text-text-dim italic">بدون خطا</div>
+            <div className="px-3 py-1.5 text-text-dim italic">بدون خطا</div>
           ) : (
             <>
-              <div className="flex justify-end px-3 py-1">
+              <div className="flex justify-end px-2 py-0.5">
                 <button
                   onClick={onClear}
-                  className="px-2.5 py-0.5 text-[11px] rounded border border-border bg-card text-text-dim cursor-pointer hover:text-text-h hover:border-accent-border transition-colors"
+                  className="px-2 py-0.5 text-[10px] rounded border border-border bg-card text-text-dim cursor-pointer hover:text-text-h hover:border-accent-border transition-colors"
                 >
                   پاک کردن
                 </button>
               </div>
-              <div className="overflow-y-auto px-3 pb-2 flex-1" ref={listRef}>
+              <div className="overflow-y-auto px-2 pb-1.5 flex-1" ref={listRef}>
                 {errors.slice(-MAX_VISIBLE).map((err, i) => (
-                  <div key={err.time + '-' + i} className="flex gap-2.5 py-0.5 font-mono text-[11px] leading-relaxed">
+                  <div key={err.time + '-' + i} className="flex gap-2 py-px font-mono text-[10px] leading-relaxed">
                     <span className="text-text-dim flex-shrink-0" dir="ltr">{formatTimestamp(err.time)}</span>
                     <span className="text-red-300 break-words">{err.message}</span>
                   </div>
