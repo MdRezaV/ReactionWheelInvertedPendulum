@@ -250,7 +250,7 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.font = '12px Vazirmatn, sans-serif'
       ctx.textAlign = 'right'
       ctx.fillText(`زاویه: ${toPersianDigits((theta * 180 / Math.PI).toFixed(1))}°`, w - 6, 14)
-      ctx.fillText(`سرعت چرخ: ${toPersianDigits((phi_dot * 180 / Math.PI).toFixed(0))}°/s`, w - 6, 27)
+      ctx.fillText(`سرعت چرخ: ${toPersianDigits((phi_dot * 30 / Math.PI).toFixed(0))} RPM`, w - 6, 27)
       ctx.fillText(`ولتاژ: ${toPersianDigits(voltage.toFixed(1))} V`, w - 6, 40)
 
       animRef.current = requestAnimationFrame(draw)
