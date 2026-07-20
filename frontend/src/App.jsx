@@ -87,7 +87,7 @@ function App() {
 
         <section className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           <div className="flex gap-4 flex-wrap">
-            <PendulumCanvas latest={latest} />
+            <PendulumCanvas latest={latest} params={params} />
             <PhasePlot getBuffer={getBuffer} />
             <NumericReadout latest={latest} />
           </div>
