@@ -54,7 +54,8 @@ export default function PendulumCanvas({ latest, params }) {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       }
 
-      ctx.clearRect(0, 0, w, h)
+      ctx.fillStyle = '#060610'
+      ctx.fillRect(0, 0, w, h)
 
       const size = Math.min(w, h)
       const cx = w / 2
@@ -102,26 +103,36 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.ellipse(cx, cy + 14, 18 + shadowScale * 12, 4, 0, 0, Math.PI * 2)
       ctx.fill()
 
-      // Trail
-      for (let i = 0; i < trail.length; i++) {
-        const alpha = (i / trail.length) * 0.35
-        const radius = 1.5 + (i / trail.length) * 2
-        ctx.fillStyle = `rgba(86, 204, 242, ${alpha})`
+      // Trail path (smooth quadratic curve with gradient fade)
+      if (trail.length > 2) {
+        const grad = ctx.createLinearGradient(
+          trail[0].x, trail[0].y,
+          trail[trail.length - 1].x, trail[trail.length - 1].y
+        )
+        grad.addColorStop(0, 'rgba(86, 204, 242, 0)')
+        grad.addColorStop(1, 'rgba(86, 204, 242, 0.45)')
+        ctx.strokeStyle = grad
+        ctx.lineWidth = 2
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
         ctx.beginPath()
-        ctx.arc(trail[i].x, trail[i].y, radius, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.moveTo(trail[0].x, trail[0].y)
+        for (let i = 1; i < trail.length - 1; i++) {
+          const mx = (trail[i].x + trail[i + 1].x) / 2
+          const my = (trail[i].y + trail[i + 1].y) / 2
+          ctx.quadraticCurveTo(trail[i].x, trail[i].y, mx, my)
+        }
+        const last = trail[trail.length - 1]
+        ctx.lineTo(last.x, last.y)
+        ctx.stroke()
       }
 
       // Base
       ctx.fillStyle = '#2a2a4a'
       ctx.fillRect(cx - 16, cy, 32, 10)
 
-      // Arm with velocity-based color
-      const speedNorm = Math.min(Math.abs(theta_dot) / 8, 1)
-      const armR = Math.round(86 + speedNorm * (235 - 86))
-      const armG = Math.round(153 + speedNorm * (87 - 153))
-      const armB = Math.round(170 + speedNorm * (87 - 170))
-      ctx.strokeStyle = `rgb(${armR}, ${armG}, ${armB})`
+      // Arm
+      ctx.strokeStyle = '#8899aa'
       ctx.lineWidth = 3.5
       ctx.lineCap = 'round'
       ctx.beginPath()
@@ -160,7 +171,7 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.fill()
       ctx.restore()
 
-      // Speed arc around wheel
+      // Speed arc around wheel — color shifts cyan → orange → red with speed
       const maxSpeed = 30
       const wheelSpeedNorm = Math.min(Math.abs(phi_dot) / maxSpeed, 1)
       if (wheelSpeedNorm > 0.01) {
@@ -168,10 +179,19 @@ export default function PendulumCanvas({ latest, params }) {
         const sweepAngle = wheelSpeedNorm * Math.PI * 1.8
         const startA = -Math.PI / 2 - sweepAngle / 2
         const endA = -Math.PI / 2 + sweepAngle / 2
-        const gR = Math.round(111 + speedNorm * (235 - 111))
-        const gG = Math.round(207 + speedNorm * (87 - 207))
-        const gB = Math.round(151 + speedNorm * (87 - 151))
-        ctx.strokeStyle = `rgba(${gR}, ${gG}, ${gB}, 0.8)`
+        let arcR, arcG, arcB
+        if (wheelSpeedNorm < 0.5) {
+          const t = wheelSpeedNorm / 0.5
+          arcR = Math.round(86 + t * (242 - 86))
+          arcG = Math.round(204 + t * (153 - 204))
+          arcB = Math.round(242 + t * (74 - 242))
+        } else {
+          const t = (wheelSpeedNorm - 0.5) / 0.5
+          arcR = Math.round(242 + t * (235 - 242))
+          arcG = Math.round(153 + t * (87 - 153))
+          arcB = Math.round(74 + t * (87 - 74))
+        }
+        ctx.strokeStyle = `rgba(${arcR}, ${arcG}, ${arcB}, 0.85)`
         ctx.lineWidth = 3
         ctx.lineCap = 'round'
         ctx.beginPath()
