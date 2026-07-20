@@ -8,9 +8,11 @@ from pydantic import ValidationError
 from models import (
     ControlMode,
     ControlParameters,
+    ManualVoltageRequest,
     SimulationParameters,
     SimulationStatus,
     TelemetryMessage,
+    WSSetManualVoltageCommand,
 )
 
 
@@ -25,9 +27,19 @@ class TestSimulationParametersDefaults:
         assert params.wheel_radius == 0.05
         assert params.gravity == 9.81
         assert params.time_step == 0.001
-        assert params.max_motor_torque == 1.0
         assert params.damping == 0.01
         assert params.wheel_damping == 0.001
+
+    def test_default_motor_parameters(self):
+        params = SimulationParameters()
+        assert params.max_voltage == 12.0
+        assert params.motor_resistance == 1.0
+        assert params.motor_inductance == 0.001
+        assert params.motor_constant == 0.05
+        assert params.motor_rotor_inertia == 1e-5
+        assert params.motor_viscous_friction == 1e-5
+        assert params.gear_ratio == 10.0
+        assert params.initial_current == 0.0
 
     def test_default_initial_conditions(self):
         params = SimulationParameters()
@@ -67,10 +79,20 @@ class TestSimulationParametersValidation:
         ("wheel_radius", -0.01),
         ("time_step", 0.0),
         ("time_step", -0.001),
-        ("max_motor_torque", 0.0),
-        ("max_motor_torque", -1.0),
         ("gravity", 0.0),
         ("gravity", -9.81),
+        ("motor_resistance", 0.0),
+        ("motor_resistance", -1.0),
+        ("motor_inductance", 0.0),
+        ("motor_inductance", -0.001),
+        ("motor_constant", 0.0),
+        ("motor_constant", -0.05),
+        ("motor_rotor_inertia", 0.0),
+        ("motor_rotor_inertia", -1e-5),
+        ("gear_ratio", 0.0),
+        ("gear_ratio", -10.0),
+        ("max_voltage", 0.0),
+        ("max_voltage", -12.0),
     ])
     def test_rejects_non_positive_required_fields(self, field: str, value: float):
         with pytest.raises(ValidationError):
@@ -83,6 +105,14 @@ class TestSimulationParametersValidation:
     def test_rejects_negative_wheel_damping(self):
         with pytest.raises(ValidationError):
             SimulationParameters(wheel_damping=-0.001)
+
+    def test_motor_viscous_friction_accepts_zero(self):
+        params = SimulationParameters(motor_viscous_friction=0.0)
+        assert params.motor_viscous_friction == 0.0
+
+    def test_rejects_negative_motor_viscous_friction(self):
+        with pytest.raises(ValidationError):
+            SimulationParameters(motor_viscous_friction=-1e-5)
 
     def test_rejects_com_exceeding_length(self):
         with pytest.raises(ValidationError, match="pendulum_com_length cannot exceed"):
@@ -113,7 +143,8 @@ class TestControlParametersDefaults:
         assert params.lqr_r == 1.0
         assert params.energy_swing_up_gain == 1.0
         assert params.upright_angle_threshold == 0.3
-        assert params.manual_torque == 0.0
+        assert params.manual_voltage == 0.0
+        assert params.lqr_q_current == 0.01
 
     def test_rejects_negative_gains(self):
         with pytest.raises(ValidationError):
@@ -150,12 +181,13 @@ class TestTelemetryMessage:
             theta_dot=-0.1,
             phi=0.5,
             phi_dot=10.0,
-            torque=0.3,
+            voltage=6.0,
             energy=1.5,
             mode=ControlMode.lqr,
         )
         assert msg.time == 1.0
         assert msg.theta == 0.01
+        assert msg.voltage == 6.0
         assert msg.mode == ControlMode.lqr
 
     def test_extended_fields_default(self):
@@ -165,12 +197,16 @@ class TestTelemetryMessage:
             theta_dot=0.0,
             phi=0.0,
             phi_dot=0.0,
-            torque=0.0,
+            voltage=0.0,
             energy=0.0,
             mode=ControlMode.none,
         )
         assert msg.theta_ddot == 0.0
         assert msg.phi_ddot == 0.0
+        assert msg.current == 0.0
+        assert msg.back_emf == 0.0
+        assert msg.motor_torque == 0.0
+        assert msg.wheel_torque == 0.0
         assert msg.kinetic_energy == 0.0
         assert msg.potential_energy == 0.0
         assert msg.angular_momentum == 0.0
@@ -184,7 +220,11 @@ class TestTelemetryMessage:
             phi=1.0,
             phi_dot=8.0,
             phi_ddot=3.5,
-            torque=0.4,
+            voltage=9.5,
+            current=2.3,
+            back_emf=4.1,
+            motor_torque=0.12,
+            wheel_torque=1.2,
             energy=2.1,
             kinetic_energy=1.8,
             potential_energy=0.3,
@@ -193,6 +233,11 @@ class TestTelemetryMessage:
         )
         assert msg.theta_ddot == -1.2
         assert msg.phi_ddot == 3.5
+        assert msg.voltage == 9.5
+        assert msg.current == 2.3
+        assert msg.back_emf == 4.1
+        assert msg.motor_torque == 0.12
+        assert msg.wheel_torque == 1.2
         assert msg.kinetic_energy == 1.8
         assert msg.potential_energy == 0.3
         assert msg.angular_momentum == 0.7
@@ -213,6 +258,30 @@ class TestControlModeEnum:
         assert "energy_swing_up" in modes
         assert "sliding_mode" in modes
         assert "manual" in modes
+
+
+class TestManualVoltageRequest:
+    """Verify ManualVoltageRequest schema."""
+
+    def test_construction(self):
+        req = ManualVoltageRequest(voltage=5.5)
+        assert req.voltage == 5.5
+
+    def test_negative_voltage_accepted(self):
+        req = ManualVoltageRequest(voltage=-3.0)
+        assert req.voltage == -3.0
+
+
+class TestWSSetManualVoltageCommand:
+    """Verify WSSetManualVoltageCommand schema."""
+
+    def test_type_literal(self):
+        cmd = WSSetManualVoltageCommand(voltage=7.2)
+        assert cmd.type == "set_manual_voltage"
+
+    def test_voltage_field(self):
+        cmd = WSSetManualVoltageCommand(voltage=-1.5)
+        assert cmd.voltage == -1.5
 
 
 class TestControlParametersSMC:

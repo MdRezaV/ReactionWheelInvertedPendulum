@@ -23,11 +23,18 @@ DEFAULT_SIMULATION_PARAMS: dict = {
     "wheel_damping": 0.001,
     "gravity": 9.81,
     "time_step": 0.001,
-    "max_motor_torque": 1.0,
+    "max_voltage": 12.0,
+    "motor_resistance": 1.0,
+    "motor_inductance": 0.001,
+    "motor_constant": 0.05,
+    "motor_rotor_inertia": 1e-5,
+    "motor_viscous_friction": 1e-5,
+    "gear_ratio": 10.0,
     "initial_theta": 0.05,
     "initial_theta_dot": 0.0,
     "initial_phi": 0.0,
     "initial_phi_dot": 0.0,
+    "initial_current": 0.0,
 }
 
 # Default control parameters
@@ -39,6 +46,7 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "lqr_q_theta_dot": 1.0,
     "lqr_q_phi_dot": 10.0,
     "lqr_q_phi": 0.1,
+    "lqr_q_current": 0.01,
     "lqr_r": 1.0,
     "energy_swing_up_gain": 1.0,
     "smc_c1": 10.0,
@@ -49,5 +57,5 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "smc_boundary": 0.05,
     "upright_angle_threshold": 0.3,
     "upright_velocity_threshold": 1.0,
-    "manual_torque": 0.0,
+    "manual_voltage": 0.0,
 }

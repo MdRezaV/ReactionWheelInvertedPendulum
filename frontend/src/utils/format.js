@@ -34,3 +34,17 @@ export function fmtAngle(rad) {
   const deg = (rad * 180) / Math.PI
   return `${fmt(rad, 4)} rad (${fmt(deg, 1)}°)`
 }
+
+/**
+ * Format a voltage value with unit.
+ */
+export function fmtVoltage(value) {
+  return `${fmt(value, 2)} V`
+}
+
+/**
+ * Format a current value with unit.
+ */
+export function fmtCurrent(value) {
+  return `${fmt(value, 3)} A`
+}

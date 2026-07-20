@@ -70,13 +70,13 @@ class SimulationManager:
 
         # Authoritative runtime state
         self._status: SimulationStatus = SimulationStatus.stopped
-        self._last_torque: float = 0.0
+        self._last_voltage: float = 0.0
         self._last_telemetry: Optional[TelemetryMessage] = None
         self._warnings: list[str] = []
         self._speed_multiplier: float = 1.0
 
         # Disturbance state
-        self._disturbance_torque: float = 0.0
+        self._disturbance_voltage: float = 0.0
         self._disturbance_remaining: int = 0
 
         # Background task management
@@ -200,10 +200,10 @@ class SimulationManager:
         self._sim.reset()
         self._ctrl_manager.reset()
         self._ws_manager.reset_throttle()
-        self._last_torque = 0.0
+        self._last_voltage = 0.0
         self._last_telemetry = None
         self._warnings.clear()
-        self._disturbance_torque = 0.0
+        self._disturbance_voltage = 0.0
         self._disturbance_remaining = 0
         logger.info("Simulation reset.")
 
@@ -300,30 +300,30 @@ class SimulationManager:
         self._collect_warnings()
         logger.info("Control mode set to '%s'.", mode.value)
 
-    def set_manual_torque(self, torque: float) -> None:
-        """Set the manual torque command (used when mode is 'manual')."""
-        self._ctrl_manager.set_manual_torque(torque)
+    def set_manual_voltage(self, voltage: float) -> None:
+        """Set the manual voltage command (used when mode is 'manual')."""
+        self._ctrl_manager.set_manual_voltage(voltage)
 
     def set_speed_multiplier(self, multiplier: float) -> None:
         """Set the simulation speed multiplier (0.1 to 10.0)."""
         self._speed_multiplier = max(0.1, min(10.0, multiplier))
         logger.info("Speed multiplier set to %.2f.", self._speed_multiplier)
 
-    def apply_disturbance(self, torque: float, duration_steps: int) -> None:
-        """Queue a disturbance impulse to be applied over subsequent steps.
+    def apply_disturbance(self, voltage: float, duration_steps: int) -> None:
+        """Queue a disturbance voltage to be applied over subsequent steps.
 
         Parameters
         ----------
-        torque : float
-            Disturbance torque magnitude [N·m].
+        voltage : float
+            Disturbance voltage magnitude [V].
         duration_steps : int
             Number of physics steps over which to apply the disturbance.
         """
-        self._disturbance_torque = torque
+        self._disturbance_voltage = voltage
         self._disturbance_remaining = max(1, duration_steps)
         logger.info(
-            "Disturbance queued: %.3f N·m for %d steps.",
-            torque,
+            "Disturbance queued: %.3f V for %d steps.",
+            voltage,
             self._disturbance_remaining,
         )
 
@@ -356,7 +356,7 @@ class SimulationManager:
             WSSetSimulationParamsCommand,
             WSSetControlParamsCommand,
             WSSetControlModeCommand,
-            WSSetManualTorqueCommand,
+            WSSetManualVoltageCommand,
             WSDisturbanceCommand,
             WSSetSpeedCommand,
         )
@@ -382,10 +382,10 @@ class SimulationManager:
                 self.update_ctrl_params(params)
             case WSSetControlModeCommand(mode=mode):
                 self.set_control_mode(mode)
-            case WSSetManualTorqueCommand(torque=torque):
-                self.set_manual_torque(torque)
-            case WSDisturbanceCommand(torque=torque, duration_steps=duration_steps):
-                self.apply_disturbance(torque, duration_steps)
+            case WSSetManualVoltageCommand(voltage=voltage):
+                self.set_manual_voltage(voltage)
+            case WSDisturbanceCommand(voltage=voltage, duration_steps=duration_steps):
+                self.apply_disturbance(voltage, duration_steps)
             case WSSetSpeedCommand(multiplier=multiplier):
                 self.set_speed_multiplier(multiplier)
 
@@ -456,23 +456,24 @@ class SimulationManager:
             raise
 
     def _physics_step(self) -> None:
-        """Execute a single physics step: compute torque, integrate, update state."""
+        """Execute a single physics step: compute voltage, integrate, update state."""
         state = self._sim.get_state()
-        torque = self._ctrl_manager.compute_torque(
+        voltage = self._ctrl_manager.compute_voltage(
             theta=state["theta"],
             theta_dot=state["theta_dot"],
             phi_dot=state["phi_dot"],
+            current=state["current"],
             energy=self._sim.compute_energy(),
             time=self._sim.time,
         )
 
         # Superimpose active disturbance
         if self._disturbance_remaining > 0:
-            torque += self._disturbance_torque
+            voltage += self._disturbance_voltage
             self._disturbance_remaining -= 1
 
-        self._sim.step(torque)
-        self._last_torque = torque
+        self._sim.step(voltage)
+        self._last_voltage = voltage
 
         # Guard against numerical blowup: if state contains NaN or Inf,
         # reset to initial conditions to prevent permanent corruption.

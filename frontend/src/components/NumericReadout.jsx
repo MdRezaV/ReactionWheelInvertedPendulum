@@ -1,4 +1,4 @@
-import { fmt, fmtAngle, fmtTorque } from '../utils/format'
+import { fmt, fmtAngle, fmtVoltage, fmtCurrent } from '../utils/format'
 
 const FIELDS = [
   { key: 'theta', label: 'θ', format: (v) => fmtAngle(v) },
@@ -7,7 +7,11 @@ const FIELDS = [
   { key: 'phi', label: 'φ', format: (v) => `${fmt(v, 3)} rad` },
   { key: 'phi_dot', label: 'φ̇', format: (v) => `${fmt(v, 2)} rad/s` },
   { key: 'phi_ddot', label: 'φ̈', format: (v) => `${fmt(v, 1)} rad/s²` },
-  { key: 'torque', label: 'τ', format: (v) => fmtTorque(v) },
+  { key: 'voltage', label: 'V', format: (v) => fmtVoltage(v) },
+  { key: 'current', label: 'i_a', format: (v) => fmtCurrent(v) },
+  { key: 'back_emf', label: 'EMF', format: (v) => `${fmt(v, 2)} V` },
+  { key: 'motor_torque', label: 'τ_m', format: (v) => `${fmt(v, 4)} N·m` },
+  { key: 'wheel_torque', label: 'τ_w', format: (v) => `${fmt(v, 4)} N·m` },
   { key: 'energy', label: 'E', format: (v) => `${fmt(v, 4)} J` },
   { key: 'kinetic_energy', label: 'KE', format: (v) => `${fmt(v, 4)} J` },
   { key: 'potential_energy', label: 'PE', format: (v) => `${fmt(v, 4)} J` },

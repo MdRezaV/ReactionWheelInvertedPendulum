@@ -30,7 +30,7 @@ from models import (
     ControlModeRequest,
     ControlParameters,
     DisturbanceRequest,
-    ManualTorqueRequest,
+    ManualVoltageRequest,
     ParamsResponse,
     ParamsUpdateRequest,
     SimulationParameters,
@@ -179,15 +179,15 @@ async def set_control_mode(request: ControlModeRequest) -> StatusResponse:
     return await get_status()
 
 
-@app.post("/api/simulation/manual-torque")
-async def set_manual_torque(request: ManualTorqueRequest) -> dict:
-    _sim_manager.set_manual_torque(request.torque)
-    return {"torque": request.torque}
+@app.post("/api/simulation/manual-voltage")
+async def set_manual_voltage(request: ManualVoltageRequest) -> dict:
+    _sim_manager.set_manual_voltage(request.voltage)
+    return {"voltage": request.voltage}
 
 
 @app.post("/api/simulation/disturbance", response_model=StatusResponse)
 async def apply_disturbance(request: DisturbanceRequest) -> StatusResponse:
-    _sim_manager.apply_disturbance(request.torque, request.duration_steps)
+    _sim_manager.apply_disturbance(request.voltage, request.duration_steps)
     return await get_status()
 
 

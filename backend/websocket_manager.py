@@ -38,7 +38,7 @@ from models import (
     WSSetSimulationParamsCommand,
     WSSetControlParamsCommand,
     WSSetControlModeCommand,
-    WSSetManualTorqueCommand,
+    WSSetManualVoltageCommand,
     WSDisturbanceCommand,
     WSSetSpeedCommand,
 )
@@ -60,7 +60,7 @@ _COMMAND_REGISTRY: dict[str, type[WSCommand]] = {
     "set_simulation_params": WSSetSimulationParamsCommand,
     "set_control_params": WSSetControlParamsCommand,
     "set_control_mode": WSSetControlModeCommand,
-    "set_manual_torque": WSSetManualTorqueCommand,
+    "set_manual_voltage": WSSetManualVoltageCommand,
     "apply_disturbance": WSDisturbanceCommand,
     "set_speed": WSSetSpeedCommand,
 }

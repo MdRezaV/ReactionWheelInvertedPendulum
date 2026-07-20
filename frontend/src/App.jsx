@@ -79,8 +79,8 @@ function App() {
     refreshStatus()
   }, [api, refreshStatus])
 
-  const handleSetManualTorque = useCallback(async (torque) => {
-    await api.setManualTorque(torque)
+  const handleSetManualVoltage = useCallback(async (voltage) => {
+    await api.setManualVoltage(voltage)
   }, [api])
 
   const handleUpdateParams = useCallback(async (body) => {
@@ -92,9 +92,9 @@ function App() {
     }
   }, [api])
 
-  const handleDisturbance = useCallback(async (torque, durationSteps) => {
+  const handleDisturbance = useCallback(async (voltage, durationSteps) => {
     try {
-      await api.applyDisturbance(torque, durationSteps)
+      await api.applyDisturbance(voltage, durationSteps)
     } catch {
       // Ignore
     }
@@ -129,7 +129,7 @@ function App() {
             onReset={handleReset}
             onStep={handleStep}
             onSetMode={handleSetMode}
-            onSetManualTorque={handleSetManualTorque}
+            onSetManualVoltage={handleSetManualVoltage}
             onUpdateParams={handleUpdateParams}
             onDisturbance={handleDisturbance}
             onSetSpeed={handleSetSpeed}

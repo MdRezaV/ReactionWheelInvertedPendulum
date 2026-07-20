@@ -39,14 +39,14 @@ export function useSimulationApi() {
     return request('/control-mode', { method: 'POST', body: JSON.stringify({ mode }) })
   }, [])
 
-  const setManualTorque = useCallback((torque) => {
-    return request('/manual-torque', { method: 'POST', body: JSON.stringify({ torque }) })
+  const setManualVoltage = useCallback((voltage) => {
+    return request('/manual-voltage', { method: 'POST', body: JSON.stringify({ voltage }) })
   }, [])
 
-  const applyDisturbance = useCallback((torque, durationSteps = 10) => {
+  const applyDisturbance = useCallback((voltage, durationSteps = 10) => {
     return request('/disturbance', {
       method: 'POST',
-      body: JSON.stringify({ torque, duration_steps: durationSteps }),
+      body: JSON.stringify({ voltage, duration_steps: durationSteps }),
     })
   }, [])
 
@@ -65,7 +65,7 @@ export function useSimulationApi() {
     reset,
     step,
     setControlMode,
-    setManualTorque,
+    setManualVoltage,
     applyDisturbance,
     setSpeed,
   }

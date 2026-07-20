@@ -17,7 +17,13 @@ const SIM_PARAMS = [
   { key: 'damping', label: 'Damping', unit: 'N·m·s', min: 0, max: 0.5, step: 0.005 },
   { key: 'wheel_damping', label: 'Wheel Damping', unit: 'N·m·s', min: 0, max: 0.1, step: 0.001 },
   { key: 'gravity', label: 'Gravity', unit: 'm/s²', min: 1, max: 20, step: 0.1 },
-  { key: 'max_motor_torque', label: 'Max Torque', unit: 'N·m', min: 0.1, max: 5, step: 0.1 },
+  { key: 'max_voltage', label: 'Max Voltage', unit: 'V', min: 1, max: 48, step: 1 },
+  { key: 'motor_resistance', label: 'Motor Resistance', unit: 'Ω', min: 0.1, max: 20, step: 0.1 },
+  { key: 'motor_inductance', label: 'Motor Inductance', unit: 'H', min: 0.0001, max: 0.1, step: 0.0001 },
+  { key: 'motor_constant', label: 'Motor Constant', unit: 'N·m/A', min: 0.001, max: 0.5, step: 0.001 },
+  { key: 'motor_rotor_inertia', label: 'Rotor Inertia', unit: 'kg·m²', min: 1e-6, max: 0.01, step: 1e-6 },
+  { key: 'motor_viscous_friction', label: 'Viscous Friction', unit: 'N·m·s', min: 0, max: 0.01, step: 0.0001 },
+  { key: 'gear_ratio', label: 'Gear Ratio', unit: '—', min: 1, max: 100, step: 1 },
   { key: 'time_step', label: 'Time Step', unit: 's', min: 0.0005, max: 0.01, step: 0.0005 },
 ]
 
@@ -29,6 +35,7 @@ const CTRL_PARAMS = [
   { key: 'lqr_q_theta_dot', label: 'LQR Q θ̇', min: 0, max: 50, step: 0.5 },
   { key: 'lqr_q_phi_dot', label: 'LQR Q φ̇', min: 0, max: 100, step: 1 },
   { key: 'lqr_r', label: 'LQR R', min: 0.01, max: 10, step: 0.1 },
+  { key: 'lqr_q_current', label: 'LQR Q i_a', min: 0, max: 10, step: 0.01 },
   { key: 'energy_swing_up_gain', label: 'Swing-Up Gain', min: 0.1, max: 10, step: 0.1 },
   { key: 'smc_c1', label: 'SMC c₁', min: 0.1, max: 50, step: 0.5 },
   { key: 'smc_c2', label: 'SMC c₂', min: 0.1, max: 30, step: 0.5 },
@@ -48,7 +55,7 @@ export default function ControlPanel({
   onReset,
   onStep,
   onSetMode,
-  onSetManualTorque,
+  onSetManualVoltage,
   onUpdateParams,
   onDisturbance,
   onSetSpeed,
@@ -134,18 +141,18 @@ export default function ControlPanel({
           {status?.control_mode === 'manual' && (
             <div className="control-section">
               <label className="control-label">
-                Manual Torque: {manualTorque.toFixed(2)} N·m
+                Manual Voltage: {manualTorque.toFixed(1)} V
               </label>
               <input
                 type="range"
-                min={-1}
-                max={1}
-                step={0.01}
+                min={-12}
+                max={12}
+                step={0.1}
                 value={manualTorque}
                 onChange={(e) => {
                   const v = parseFloat(e.target.value)
                   setManualTorque(v)
-                  onSetManualTorque(v)
+                  onSetManualVoltage(v)
                 }}
                 className="param-slider"
               />
@@ -174,17 +181,17 @@ export default function ControlPanel({
           <div className="control-section">
             <label className="control-label">Disturbance</label>
             <div className="button-group">
-              <button onClick={() => onDisturbance(0.5, 20)} className="btn-disturb">
-                +0.5 N·m
+              <button onClick={() => onDisturbance(6, 20)} className="btn-disturb">
+                +6V
               </button>
-              <button onClick={() => onDisturbance(-0.5, 20)} className="btn-disturb">
-                −0.5 N·m
+              <button onClick={() => onDisturbance(-6, 20)} className="btn-disturb">
+                −6V
               </button>
-              <button onClick={() => onDisturbance(1.0, 10)} className="btn-disturb">
-                +1.0 N·m
+              <button onClick={() => onDisturbance(12, 10)} className="btn-disturb">
+                +12V
               </button>
-              <button onClick={() => onDisturbance(-1.0, 10)} className="btn-disturb">
-                −1.0 N·m
+              <button onClick={() => onDisturbance(-12, 10)} className="btn-disturb">
+                −12V
               </button>
             </div>
           </div>

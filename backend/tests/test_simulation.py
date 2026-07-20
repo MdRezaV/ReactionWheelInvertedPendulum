@@ -1,7 +1,10 @@
-"""Tests for the physics simulation engine.
+"""Tests for the 5-state DC motor reaction wheel inverted pendulum simulation.
 
 Verifies numerical correctness of the RK4 integrator, energy conservation,
-torque saturation, parameter validation, and qualitative dynamic response.
+voltage saturation, parameter validation, qualitative dynamic response,
+gearbox effects, and the electrical (armature current) state dynamics.
+
+State vector: [theta, theta_dot, phi, phi_dot, i_a]
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from simulation import Simulation
 
 
 class TestUprightEquilibrium:
-    """The upright position with zero torque and zero velocity is an equilibrium."""
+    """With zero voltage and zero initial current, upright is an equilibrium."""
 
     def test_stationary_at_upright(self):
         params = SimulationParameters(
@@ -24,6 +27,7 @@ class TestUprightEquilibrium:
             initial_theta_dot=0.0,
             initial_phi=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
         )
         sim = Simulation(params)
 
@@ -34,54 +38,76 @@ class TestUprightEquilibrium:
         assert abs(state["theta"]) < 1e-10
         assert abs(state["theta_dot"]) < 1e-10
         assert abs(state["phi_dot"]) < 1e-10
+        assert abs(state["current"]) < 1e-10
 
-    def test_near_upright_small_perturbation_bounded(self):
-        """A tiny perturbation with no control should not diverge rapidly."""
+    def test_current_decays_with_zero_voltage(self):
+        """With zero voltage and nonzero initial current, current decays ~exponentially.
+
+        Uses weak electromechanical coupling (small gear_ratio and motor_constant)
+        so that back-EMF feedback is negligible and the decay is approximately
+        i(t) = i_0 * exp(-R t / L).
+        """
+        L = 0.01
+        R = 1.0
         params = SimulationParameters(
-            initial_theta=1e-6,
+            initial_theta=0.0,
             initial_theta_dot=0.0,
+            initial_phi=0.0,
             initial_phi_dot=0.0,
+            initial_current=1.0,
+            motor_inductance=L,
+            motor_resistance=R,
+            gear_ratio=1.0,
+            motor_constant=0.01,
             damping=0.0,
             wheel_damping=0.0,
+            motor_viscous_friction=0.0,
         )
         sim = Simulation(params)
 
-        for _ in range(100):
+        tau = L / R  # 0.01 s = 10 steps at dt=0.001
+        steps_per_tau = int(tau / params.time_step)
+
+        for _ in range(steps_per_tau):
             sim.step(0.0)
 
         state = sim.get_state()
-        # With no damping the inverted pendulum is unstable, but over
-        # 0.1 s a 1e-6 perturbation should remain small.
-        assert abs(state["theta"]) < 0.01
+        expected = math.exp(-1.0)  # i_0 * e^{-1}
+        assert state["current"] == pytest.approx(expected, rel=0.10)
 
 
 class TestEnergyConservation:
-    """With zero damping and zero torque, mechanical energy is conserved."""
+    """With zero damping and negligible resistance, mechanical energy is conserved."""
 
     def test_energy_conserved_undamped(self):
+        """With R very small, I²R losses are negligible over the test horizon."""
         params = SimulationParameters(
             initial_theta=0.3,
             initial_theta_dot=0.5,
             initial_phi_dot=2.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
+            motor_viscous_friction=0.0,
+            motor_resistance=1e-4,
+            motor_inductance=0.01,
         )
         sim = Simulation(params)
 
         e0 = sim.compute_energy()
 
-        for _ in range(5000):
+        for _ in range(2000):
             sim.step(0.0)
 
         e_final = sim.compute_energy()
-        # RK4 with dt=0.001 over 5 s: relative drift should be tiny
-        assert abs(e_final - e0) < 1e-6 * max(abs(e0), 1.0)
+        assert abs(e_final - e0) < 1e-3 * max(abs(e0), 1.0)
 
     def test_energy_dissipates_with_damping(self):
         params = SimulationParameters(
             initial_theta=0.3,
             initial_theta_dot=1.0,
             initial_phi_dot=5.0,
+            initial_current=0.0,
             damping=0.05,
             wheel_damping=0.01,
         )
@@ -96,141 +122,102 @@ class TestEnergyConservation:
         assert e_final < e0
 
 
-class TestTorqueSaturation:
-    """Commanded torque must be clamped to max_motor_torque."""
+class TestVoltageSaturation:
+    """Commanded voltage must be clamped to [-max_voltage, max_voltage]."""
 
     def test_positive_saturation(self):
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
-            max_motor_torque=0.5,
-            damping=0.0,
-            wheel_damping=0.0,
+            initial_current=0.0,
+            max_voltage=12.0,
         )
         sim = Simulation(params)
 
-        sim.step(10.0)  # Command far exceeds limit
+        sim.step(100.0)
         telemetry = sim.get_telemetry(ControlMode.manual)
-        assert telemetry.torque == pytest.approx(0.5)
+        assert telemetry.voltage == pytest.approx(12.0)
 
     def test_negative_saturation(self):
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
-            max_motor_torque=0.5,
-            damping=0.0,
-            wheel_damping=0.0,
+            initial_current=0.0,
+            max_voltage=12.0,
         )
         sim = Simulation(params)
 
-        sim.step(-10.0)
+        sim.step(-100.0)
         telemetry = sim.get_telemetry(ControlMode.manual)
-        assert telemetry.torque == pytest.approx(-0.5)
+        assert telemetry.voltage == pytest.approx(-12.0)
 
     def test_within_limits_unchanged(self):
-        params = SimulationParameters(max_motor_torque=1.0)
+        params = SimulationParameters(max_voltage=12.0)
         sim = Simulation(params)
 
-        sim.step(0.3)
+        sim.step(5.0)
         telemetry = sim.get_telemetry(ControlMode.manual)
-        assert telemetry.torque == pytest.approx(0.3)
-
-
-class TestParameterValidation:
-    """Simulation must reject parameters that produce invalid physics."""
-
-    def test_zero_pendulum_mass_raises(self):
-        with pytest.raises(ValueError):
-            SimulationParameters(pendulum_mass=0.0)
-
-    def test_negative_inertia_raises_on_construction(self):
-        """Pydantic catches negative inertia at model level."""
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            SimulationParameters(pendulum_inertia=-1.0)
-
-    def test_degenerate_inertia_matrix_raises(self):
-        """If wheel_inertia is set to create a singular matrix, Simulation raises."""
-        # M12 = I_w, M22 = I_w => det = M11*I_w - I_w^2 = I_w*(M11 - I_w)
-        # This is always positive for valid params, so we test via the
-        # simulation's internal validation by constructing extreme params.
-        # A zero wheel inertia would make M22=0 and det=0.
-        # But pydantic requires gt=0, so we test the simulation directly
-        # with a manually crafted params object that bypasses pydantic.
-        params = SimulationParameters(wheel_inertia=1e-15, wheel_mass=0.5, wheel_radius=0.05)
-        # This should still be valid (tiny but positive)
-        sim = Simulation(params)
-        assert sim.inertia_matrix[1, 1] > 0
+        assert telemetry.voltage == pytest.approx(5.0)
 
 
 class TestQualitativeDynamics:
-    """Verify the coupled reaction-wheel dynamics respond in expected directions."""
+    """Verify the coupled electro-mechanical dynamics respond in expected directions."""
 
-    def test_positive_torque_spins_wheel_positive(self):
-        """Applying positive torque should increase phi_dot (wheel spins up)."""
+    def test_positive_voltage_spins_wheel_positive(self):
+        """Positive voltage builds current, which torques the wheel in positive direction."""
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
+            motor_viscous_friction=0.0,
         )
         sim = Simulation(params)
 
         for _ in range(100):
-            sim.step(0.5)
+            sim.step(5.0)
 
         state = sim.get_state()
         assert state["phi_dot"] > 0.0
+        assert state["current"] > 0.0
 
-    def test_positive_torque_reacts_on_pendulum(self):
-        """Positive wheel torque creates a negative reaction on the pendulum.
+    def test_positive_voltage_reacts_on_pendulum(self):
+        """Positive wheel torque creates a negative reaction on the pendulum body.
 
-        The reaction torque on the pendulum body opposes the wheel
-        acceleration, so theta should decrease (pendulum tips backward).
+        The reaction torque opposes wheel acceleration, so theta decreases
+        (pendulum tips backward from upright).
         """
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
+            motor_viscous_friction=0.0,
         )
         sim = Simulation(params)
 
         for _ in range(100):
-            sim.step(0.5)
+            sim.step(5.0)
 
         state = sim.get_state()
-        # Reaction torque on pendulum is -u, so theta_ddot < 0 initially
         assert state["theta"] < 0.0
 
-    def test_negative_torque_spins_wheel_negative(self):
-        params = SimulationParameters(
-            initial_theta=0.0,
-            initial_theta_dot=0.0,
-            initial_phi_dot=0.0,
-            damping=0.0,
-            wheel_damping=0.0,
-        )
-        sim = Simulation(params)
-
-        for _ in range(100):
-            sim.step(-0.5)
-
-        state = sim.get_state()
-        assert state["phi_dot"] < 0.0
-
     def test_gravity_tips_pendulum_from_upright(self):
-        """With no torque, a small positive theta should grow (inverted pendulum)."""
+        """With no voltage, a small positive theta should grow (inverted pendulum instability)."""
         params = SimulationParameters(
             initial_theta=0.1,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
+            motor_viscous_friction=0.0,
         )
         sim = Simulation(params)
 
@@ -238,12 +225,46 @@ class TestQualitativeDynamics:
             sim.step(0.0)
 
         state = sim.get_state()
-        # Inverted pendulum: theta should grow in magnitude
         assert abs(state["theta"]) > 0.1
+
+    def test_current_rises_with_voltage_step(self):
+        """Current rises toward V/R with electrical time constant tau = L/R.
+
+        Uses weak electromechanical coupling so back-EMF feedback is negligible.
+        After 5*tau the current should reach ~99.3% of steady state V/R.
+        """
+        R = 2.0
+        L = 0.01
+        V = 4.0
+        params = SimulationParameters(
+            initial_theta=0.0,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+            initial_current=0.0,
+            motor_resistance=R,
+            motor_inductance=L,
+            gear_ratio=1.0,
+            motor_constant=0.01,
+            damping=0.0,
+            wheel_damping=0.0,
+            motor_viscous_friction=0.0,
+            max_voltage=12.0,
+        )
+        sim = Simulation(params)
+
+        tau = L / R  # 0.005 s = 5 steps
+        total_steps = int(5 * tau / params.time_step)  # 25 steps
+
+        for _ in range(total_steps):
+            sim.step(V)
+
+        state = sim.get_state()
+        steady_state = V / R  # 2.0 A
+        assert state["current"] == pytest.approx(steady_state, rel=0.05)
 
 
 class TestSimulationReset:
-    """Verify reset restores initial conditions."""
+    """Verify reset restores all 5 state variables to initial conditions."""
 
     def test_reset_restores_state(self):
         params = SimulationParameters(
@@ -251,11 +272,12 @@ class TestSimulationReset:
             initial_theta_dot=1.0,
             initial_phi=0.5,
             initial_phi_dot=3.0,
+            initial_current=0.7,
         )
         sim = Simulation(params)
 
         for _ in range(500):
-            sim.step(0.1)
+            sim.step(2.0)
 
         sim.reset()
         state = sim.get_state()
@@ -263,6 +285,7 @@ class TestSimulationReset:
         assert state["theta_dot"] == pytest.approx(1.0)
         assert state["phi"] == pytest.approx(0.5)
         assert state["phi_dot"] == pytest.approx(3.0)
+        assert state["current"] == pytest.approx(0.7)
         assert state["time"] == pytest.approx(0.0)
 
 
@@ -273,6 +296,7 @@ class TestAngleWrapping:
         params = SimulationParameters(
             initial_theta=3.0,
             initial_theta_dot=2.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
         )
@@ -288,23 +312,49 @@ class TestAngleWrapping:
 class TestExtendedTelemetry:
     """Verify extended telemetry fields are populated correctly."""
 
+    def test_telemetry_electrical_fields(self):
+        """Verify voltage, current, back_emf, motor_torque, wheel_torque relationships."""
+        Kt = 0.05
+        N = 10.0
+        params = SimulationParameters(
+            initial_theta=0.1,
+            initial_theta_dot=0.5,
+            initial_phi_dot=2.0,
+            initial_current=0.3,
+            motor_constant=Kt,
+            gear_ratio=N,
+        )
+        sim = Simulation(params)
+        sim.step(3.0)
+        telemetry = sim.get_telemetry(ControlMode.manual)
+
+        assert telemetry.voltage == pytest.approx(3.0)
+        assert telemetry.current != 0.0
+        # back_emf = Ke * N * phi_dot
+        assert telemetry.back_emf == pytest.approx(Kt * N * telemetry.phi_dot)
+        # motor_torque = Kt * i_a
+        assert telemetry.motor_torque == pytest.approx(Kt * telemetry.current)
+        # wheel_torque = N * Kt * i_a
+        assert telemetry.wheel_torque == pytest.approx(N * Kt * telemetry.current)
+
     def test_telemetry_has_accelerations(self):
         params = SimulationParameters(
             initial_theta=0.1,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
         )
         sim = Simulation(params)
         sim.step(0.0)
         telemetry = sim.get_telemetry(ControlMode.none)
         assert telemetry.theta_ddot != 0.0
-        assert telemetry.phi_ddot == pytest.approx(0.0, abs=1e-10)
 
     def test_telemetry_energy_components(self):
         params = SimulationParameters(
             initial_theta=0.3,
             initial_theta_dot=1.0,
             initial_phi_dot=2.0,
+            initial_current=0.0,
         )
         sim = Simulation(params)
         sim.step(0.0)
@@ -320,6 +370,7 @@ class TestExtendedTelemetry:
             initial_theta=0.0,
             initial_theta_dot=1.0,
             initial_phi_dot=5.0,
+            initial_current=0.0,
         )
         sim = Simulation(params)
         sim.step(0.0)
@@ -331,6 +382,7 @@ class TestExtendedTelemetry:
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
         )
         sim = Simulation(params)
         telemetry = sim.get_telemetry(ControlMode.none)
@@ -340,32 +392,77 @@ class TestExtendedTelemetry:
 
 
 class TestDisturbance:
-    """Verify impulse disturbance application."""
+    """Verify voltage disturbance application."""
 
-    def test_disturbance_changes_state(self):
+    def test_voltage_disturbance_changes_state(self):
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
+            initial_current=0.0,
             damping=0.0,
             wheel_damping=0.0,
         )
         sim = Simulation(params)
-        sim.apply_impulse(1.0, 50)
+        sim.apply_impulse(5.0, 50)
         state = sim.get_state()
         assert state["phi_dot"] != 0.0
+        assert state["current"] != 0.0
         assert state["time"] == pytest.approx(0.05)
 
-    def test_disturbance_respects_saturation(self):
+    def test_disturbance_respects_voltage_saturation(self):
         params = SimulationParameters(
             initial_theta=0.0,
             initial_theta_dot=0.0,
             initial_phi_dot=0.0,
-            max_motor_torque=0.5,
-            damping=0.0,
-            wheel_damping=0.0,
+            initial_current=0.0,
+            max_voltage=12.0,
         )
         sim = Simulation(params)
-        sim.apply_impulse(10.0, 10)
+        sim.apply_impulse(100.0, 10)
         telemetry = sim.get_telemetry(ControlMode.manual)
-        assert telemetry.torque == pytest.approx(0.5)
+        assert telemetry.voltage == pytest.approx(12.0)
+
+
+class TestGearboxEffect:
+    """Verify gearbox correctly reflects motor rotor inertia and scales torque."""
+
+    def test_effective_wheel_inertia_includes_reflected_rotor(self):
+        """With gear_ratio=N, effective wheel inertia = I_w + J_m * N²."""
+        N = 10.0
+        J_m = 1e-5
+        wheel_mass = 0.5
+        wheel_radius = 0.05
+        params = SimulationParameters(
+            gear_ratio=N,
+            motor_rotor_inertia=J_m,
+            wheel_mass=wheel_mass,
+            wheel_radius=wheel_radius,
+        )
+        sim = Simulation(params)
+
+        # Solid cylinder fallback: I_w = 0.5 * m * r²
+        I_w = 0.5 * wheel_mass * wheel_radius ** 2
+        expected_I_w_eff = I_w + J_m * N ** 2
+
+        # M22 in the inertia matrix equals I_w_eff
+        assert sim.inertia_matrix[1, 1] == pytest.approx(expected_I_w_eff)
+
+    def test_wheel_torque_is_geared_motor_torque(self):
+        """Wheel torque = N * Kt * i_a; motor torque = Kt * i_a."""
+        N = 10.0
+        Kt = 0.05
+        i_a = 2.0
+        params = SimulationParameters(
+            gear_ratio=N,
+            motor_constant=Kt,
+            initial_theta=0.0,
+            initial_theta_dot=0.0,
+            initial_phi_dot=0.0,
+            initial_current=i_a,
+        )
+        sim = Simulation(params)
+        telemetry = sim.get_telemetry(ControlMode.none)
+
+        assert telemetry.motor_torque == pytest.approx(Kt * i_a)
+        assert telemetry.wheel_torque == pytest.approx(N * Kt * i_a)

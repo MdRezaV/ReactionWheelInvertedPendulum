@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 
 const SERIES = [
-  { key: 'torque', label: 'Torque (N·m)', color: '#e57373' },
-  { key: 'phi_dot', label: 'φ̇ (rad/s)', color: '#ce93d8' },
-  { key: 'angular_momentum', label: 'L (kg·m²/s)', color: '#4db6ac' },
+  { key: 'voltage', label: 'V (V)', color: '#e57373' },
+  { key: 'current', label: 'i_a (A)', color: '#ce93d8' },
+  { key: 'phi_dot', label: 'φ̇ (rad/s)', color: '#4db6ac' },
 ]
 
 const CHART_HEIGHT = 150
@@ -112,7 +112,7 @@ export default function TorqueChart({ getBuffer }) {
   return (
     <div className="chart-container">
       <div className="chart-header">
-        <h3>Torque & Wheel</h3>
+        <h3>Electrical & Wheel</h3>
         <div className="chart-legend">
           {SERIES.map((s) => (
             <span key={s.key} className="legend-item">

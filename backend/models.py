@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -58,16 +61,53 @@ class SimulationParameters(BaseModel):
     wheel_damping: float = Field(default=0.001, ge=0, description="Wheel bearing damping [N·m·s/rad]")
     gravity: float = Field(default=9.81, gt=0, description="Gravitational acceleration [m/s²]")
     time_step: float = Field(default=0.001, gt=0, description="Integration time step [s]")
-    max_motor_torque: float = Field(default=1.0, gt=0, description="Maximum motor torque [N·m]")
+    max_voltage: float = Field(default=12.0, gt=0, description="Maximum applied voltage [V]")
+    motor_resistance: float = Field(default=1.0, gt=0, description="Armature resistance [Ω]")
+    motor_inductance: float = Field(
+        default=0.001, gt=0,
+        description="Armature inductance [H]; L/R must be >= time_step/10 (stiffness guard)",
+    )
+    motor_constant: float = Field(
+        default=0.05, gt=0, description="Motor torque/back-EMF constant Kt=Ke [N·m/A = V·s/rad]"
+    )
+    motor_rotor_inertia: float = Field(default=1e-5, gt=0, description="Motor rotor inertia [kg·m²]")
+    motor_viscous_friction: float = Field(
+        default=1e-5, ge=0, description="Motor viscous friction [N·m·s/rad]"
+    )
+    gear_ratio: float = Field(default=10.0, gt=0, description="Gearbox ratio N (motor_speed = N * wheel_speed)")
     initial_theta: float = Field(default=0.05, description="Initial pendulum angle [rad]")
     initial_theta_dot: float = Field(default=0.0, description="Initial pendulum angular velocity [rad/s]")
     initial_phi: float = Field(default=0.0, description="Initial wheel angle [rad]")
     initial_phi_dot: float = Field(default=0.0, description="Initial wheel angular velocity [rad/s]")
+    initial_current: float = Field(default=0.0, description="Initial armature current [A]")
 
     @model_validator(mode="after")
     def _validate_com_within_length(self) -> "SimulationParameters":
         if self.pendulum_com_length is not None and self.pendulum_com_length > self.pendulum_length:
             raise ValueError("pendulum_com_length cannot exceed pendulum_length")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_electrical_stiffness(self) -> "SimulationParameters":
+        """Reject inductance values that make the electrical time constant too small.
+
+        The electrical time constant tau_e = L / R must satisfy
+        tau_e >= time_step / 10 to avoid numerical stiffness in the
+        coupled electro-mechanical ODE system.
+        """
+        tau_e = self.motor_inductance / self.motor_resistance
+        min_tau = self.time_step / 10.0
+        if tau_e < min_tau:
+            logger.warning(
+                "Electrical time constant L/R=%.6f s is below minimum %.6f s "
+                "(time_step/10). Increase motor_inductance or decrease time_step.",
+                tau_e,
+                min_tau,
+            )
+            raise ValueError(
+                f"motor_inductance/motor_resistance ({tau_e:.6e} s) must be >= "
+                f"time_step/10 ({min_tau:.6e} s) to avoid numerical stiffness"
+            )
         return self
 
 
@@ -105,7 +145,9 @@ class ControlParameters(BaseModel):
         default=1.0, gt=0, description="Velocity threshold for upright switch [rad/s]"
     )
 
-    manual_torque: float = Field(default=0.0, description="Manual torque command [N·m]")
+    lqr_q_current: float = Field(default=0.01, ge=0, description="LQR weight on armature current")
+
+    manual_voltage: float = Field(default=0.0, description="Manual voltage command [V]")
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +177,11 @@ class TelemetryMessage(BaseModel):
     phi: float
     phi_dot: float
     phi_ddot: float = 0.0
-    torque: float
+    voltage: float
+    current: float = 0.0
+    back_emf: float = 0.0
+    motor_torque: float = 0.0
+    wheel_torque: float = 0.0
     energy: float
     kinetic_energy: float = 0.0
     potential_energy: float = 0.0
@@ -157,8 +203,8 @@ class ControlModeRequest(BaseModel):
     mode: ControlMode
 
 
-class ManualTorqueRequest(BaseModel):
-    torque: float = Field(description="Torque command [N·m]")
+class ManualVoltageRequest(BaseModel):
+    voltage: float = Field(description="Voltage command [V]")
 
 
 class StepRequest(BaseModel):
@@ -166,7 +212,7 @@ class StepRequest(BaseModel):
 
 
 class DisturbanceRequest(BaseModel):
-    torque: float = Field(description="Impulse torque magnitude [N·m]")
+    voltage: float = Field(description="Disturbance voltage magnitude [V]")
     duration_steps: int = Field(default=10, ge=1, le=1000, description="Duration in physics steps")
 
 
@@ -230,14 +276,14 @@ class WSSetControlModeCommand(WSCommandBase):
     mode: ControlMode
 
 
-class WSSetManualTorqueCommand(WSCommandBase):
-    type: Literal["set_manual_torque"] = "set_manual_torque"
-    torque: float
+class WSSetManualVoltageCommand(WSCommandBase):
+    type: Literal["set_manual_voltage"] = "set_manual_voltage"
+    voltage: float
 
 
 class WSDisturbanceCommand(WSCommandBase):
     type: Literal["apply_disturbance"] = "apply_disturbance"
-    torque: float
+    voltage: float
     duration_steps: int = Field(default=10, ge=1, le=1000)
 
 
@@ -257,7 +303,7 @@ WSCommand = (
     | WSSetSimulationParamsCommand
     | WSSetControlParamsCommand
     | WSSetControlModeCommand
-    | WSSetManualTorqueCommand
+    | WSSetManualVoltageCommand
     | WSDisturbanceCommand
     | WSSetSpeedCommand
 )

@@ -58,7 +58,10 @@ class TestParamsEndpoint:
         assert "control" in data
         assert data["simulation"]["pendulum_mass"] == pytest.approx(1.0)
         assert data["simulation"]["time_step"] == pytest.approx(0.001)
+        assert data["simulation"]["max_voltage"] == pytest.approx(12.0)
+        assert data["simulation"]["motor_resistance"] == pytest.approx(1.0)
         assert data["control"]["pid_kp"] == pytest.approx(50.0)
+        assert data["control"]["manual_voltage"] == pytest.approx(0.0)
 
     async def test_partial_simulation_param_update(self, client: httpx.AsyncClient):
         resp = await client.post(
@@ -139,24 +142,24 @@ class TestControlModeEndpoint:
         assert resp.status_code == 422
 
 
-class TestManualTorqueEndpoint:
-    """POST /api/simulation/manual-torque"""
+class TestManualVoltageEndpoint:
+    """POST /api/simulation/manual-voltage"""
 
-    async def test_set_manual_torque(self, client: httpx.AsyncClient):
+    async def test_set_manual_voltage(self, client: httpx.AsyncClient):
         resp = await client.post(
-            "/api/simulation/manual-torque",
-            json={"torque": 0.42},
+            "/api/simulation/manual-voltage",
+            json={"voltage": 5.0},
         )
         assert resp.status_code == 200
-        assert resp.json()["torque"] == pytest.approx(0.42)
+        assert resp.json()["voltage"] == pytest.approx(5.0)
 
-    async def test_set_negative_torque(self, client: httpx.AsyncClient):
+    async def test_set_negative_voltage(self, client: httpx.AsyncClient):
         resp = await client.post(
-            "/api/simulation/manual-torque",
-            json={"torque": -0.7},
+            "/api/simulation/manual-voltage",
+            json={"voltage": -3.5},
         )
         assert resp.status_code == 200
-        assert resp.json()["torque"] == pytest.approx(-0.7)
+        assert resp.json()["voltage"] == pytest.approx(-3.5)
 
 
 class TestResetEndpoint:
@@ -189,7 +192,11 @@ class TestStepEndpoint:
         assert "theta" in data
         assert "theta_dot" in data
         assert "phi_dot" in data
-        assert "torque" in data
+        assert "voltage" in data
+        assert "current" in data
+        assert "back_emf" in data
+        assert "motor_torque" in data
+        assert "wheel_torque" in data
         assert "energy" in data
         assert "mode" in data
 
@@ -210,8 +217,8 @@ class TestStepEndpoint:
         resp = await client.post("/api/simulation/step", json={"steps": 50})
         data = resp.json()
         assert data["mode"] == "lqr"
-        # LQR should produce non-zero torque for non-zero initial theta
-        assert data["torque"] != 0.0
+        # LQR should produce non-zero voltage for non-zero initial theta
+        assert data["voltage"] != 0.0
 
     async def test_step_invalid_steps_rejected(self, client: httpx.AsyncClient):
         resp = await client.post("/api/simulation/step", json={"steps": 0})
@@ -224,7 +231,7 @@ class TestDisturbanceEndpoint:
     async def test_apply_disturbance(self, client: httpx.AsyncClient):
         resp = await client.post(
             "/api/simulation/disturbance",
-            json={"torque": 0.5, "duration_steps": 10},
+            json={"voltage": 0.5, "duration_steps": 10},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -233,7 +240,7 @@ class TestDisturbanceEndpoint:
     async def test_disturbance_invalid_duration(self, client: httpx.AsyncClient):
         resp = await client.post(
             "/api/simulation/disturbance",
-            json={"torque": 0.5, "duration_steps": 0},
+            json={"voltage": 0.5, "duration_steps": 0},
         )
         assert resp.status_code == 422
 
@@ -328,3 +335,16 @@ class TestWebSocket:
                 # Send another command to verify the connection is still alive.
                 ws.send_json({"type": "stop"})
                 # Connection should remain open (no exception raised)
+
+    async def test_valid_set_manual_voltage_command(self, client: httpx.AsyncClient):
+        """A valid set_manual_voltage command over WebSocket should be accepted."""
+        from starlette.testclient import TestClient
+        from main import app
+
+        with TestClient(app) as tc:
+            with tc.websocket_connect("/ws/telemetry") as ws:
+                ws.receive_json()
+                ws.send_json({"type": "set_manual_voltage", "voltage": 3.0})
+                # Command should be processed without error.
+                # Verify connection is still alive with a follow-up command.
+                ws.send_json({"type": "stop"})

@@ -2,12 +2,13 @@
 
 Implements PID, LQR, energy-based swing-up, manual, and no-control
 strategies. All controllers share a common interface and clamp output
-torque to the actuator limit.
+voltage to the actuator limit.
 
 State conventions (from simulation.py):
   theta     – pendulum angle from upright (0 = upright), wrapped to (-pi, pi]
   theta_dot – pendulum angular velocity [rad/s]
   phi_dot   – wheel angular velocity relative to the pendulum arm [rad/s]
+  current   – armature current [A]
   energy    – total mechanical energy referenced to upright (0 at upright rest)
 """
 
@@ -40,17 +41,18 @@ class Controller(abc.ABC):
         """Reset internal controller state (integrators, flags, etc.)."""
 
     @abc.abstractmethod
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> float:
-        """Compute the motor torque command.
+        """Compute the motor voltage command.
 
         Parameters
         ----------
@@ -60,6 +62,8 @@ class Controller(abc.ABC):
             Pendulum angular velocity [rad/s].
         phi_dot : float
             Relative wheel angular velocity [rad/s].
+        current : float
+            Armature current [A].
         energy : float
             Total mechanical energy (upright-referenced) [J].
         time : float
@@ -72,13 +76,13 @@ class Controller(abc.ABC):
         Returns
         -------
         float
-            Motor torque command, clamped to [-max_motor_torque, max_motor_torque].
+            Voltage command [V], clamped to [-max_voltage, max_voltage].
         """
 
     @staticmethod
-    def _clamp(torque: float, max_torque: float) -> float:
-        """Clamp torque to actuator limits."""
-        return float(np.clip(torque, -max_torque, max_torque))
+    def _clamp_voltage(voltage: float, max_voltage: float) -> float:
+        """Clamp voltage to actuator limits."""
+        return float(np.clip(voltage, -max_voltage, max_voltage))
 
 
 # ---------------------------------------------------------------------------
@@ -87,16 +91,17 @@ class Controller(abc.ABC):
 
 
 class NoController(Controller):
-    """Returns zero torque (free-fall / uncontrolled)."""
+    """Returns zero voltage (free-fall / uncontrolled)."""
 
     def reset(self) -> None:
         pass
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
@@ -111,29 +116,31 @@ class NoController(Controller):
 
 
 class ManualController(Controller):
-    """Returns a user-specified torque, saturated to the actuator limit."""
+    """Returns a user-specified voltage, saturated to the actuator limit."""
 
     def __init__(self) -> None:
-        self._torque: float = 0.0
+        self._voltage: Optional[float] = None
 
-    def set_torque(self, torque: float) -> None:
-        """Set the manual torque command [N·m]."""
-        self._torque = torque
+    def set_voltage(self, voltage: float) -> None:
+        """Set the manual voltage command [V]."""
+        self._voltage = voltage
 
     def reset(self) -> None:
-        self._torque = 0.0
+        self._voltage = None
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> float:
-        return self._clamp(self._torque, sim_params.max_motor_torque)
+        voltage = self._voltage if self._voltage is not None else ctrl_params.manual_voltage
+        return self._clamp_voltage(voltage, sim_params.max_voltage)
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +151,8 @@ class ManualController(Controller):
 class PIDController(Controller):
     """PID balance controller for the upright equilibrium.
 
-    Sign convention: positive torque for positive theta (pendulum tilted
-    in the positive direction requires positive corrective torque).
+    Sign convention: positive voltage for positive theta (pendulum tilted
+    in the positive direction requires positive corrective voltage).
 
     u = Kp * theta + Ki * integral(theta) + Kd * theta_dot
 
@@ -160,11 +167,12 @@ class PIDController(Controller):
         """Reset the integral accumulator."""
         self._integral = 0.0
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
@@ -174,7 +182,7 @@ class PIDController(Controller):
         ki = ctrl_params.pid_ki
         kd = ctrl_params.pid_kd
         dt = sim_params.time_step
-        max_torque = sim_params.max_motor_torque
+        max_voltage = sim_params.max_voltage
 
         # Proportional + derivative
         p_term = kp * theta
@@ -187,7 +195,7 @@ class PIDController(Controller):
         i_term = ki * self._integral
         output = output_no_i + i_term
 
-        if abs(output) < max_torque:
+        if abs(output) < max_voltage:
             # Not saturated – accumulate normally
             self._integral += theta * dt
         else:
@@ -199,7 +207,7 @@ class PIDController(Controller):
         i_term = ki * self._integral
         output = output_no_i + i_term
 
-        return self._clamp(output, max_torque)
+        return self._clamp_voltage(output, max_voltage)
 
 
 # ---------------------------------------------------------------------------
@@ -210,24 +218,22 @@ class PIDController(Controller):
 class LQRController(Controller):
     """LQR balance controller using the continuous-time linearization.
 
-    Linearizes the coupled pendulum-wheel dynamics around the upright
-    equilibrium (theta = 0) for the reduced state [theta, theta_dot, phi_dot].
+    Linearizes the coupled electro-mechanical pendulum-wheel dynamics
+    around the upright equilibrium (theta = 0) for the state
+    [theta, theta_dot, phi_dot, i_a] with voltage input V.
 
     The linear model:
-        x_dot = A x + B u
+        x_dot = A x + B V
 
-    is derived from the full nonlinear equations:
-        M @ [theta_ddot, phi_ddot]^T = f(theta, theta_dot, phi_dot, u)
-
-    where M is the 2x2 coupled inertia matrix and f contains gravity,
-    damping, and control input terms.
+    is derived from the full nonlinear equations including the armature
+    circuit: L di/dt = V - R i - Ke*N*phi_dot.
 
     If the Riccati equation fails or produces non-finite gains, the
     controller falls back to PID behavior and sets a warning flag.
     """
 
     def __init__(self) -> None:
-        self._gain: Optional[np.ndarray] = None  # shape (1, 3)
+        self._gain: Optional[np.ndarray] = None  # shape (1, 4)
         self._warning: Optional[str] = None
         self._pid_fallback: PIDController = PIDController()
         self._last_sim_params: Optional[SimulationParameters] = None
@@ -240,7 +246,7 @@ class LQRController(Controller):
 
     @property
     def gain(self) -> Optional[np.ndarray]:
-        """Current LQR gain vector K (shape (3,)) or None if unavailable."""
+        """Current LQR gain vector K (shape (4,)) or None if unavailable."""
         if self._gain is not None:
             return self._gain.flatten()
         return None
@@ -255,7 +261,7 @@ class LQRController(Controller):
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> None:
-        """Compute the LQR gain from the linearized model.
+        """Compute the LQR gain from the linearized electro-mechanical model.
 
         Sets self._gain on success or self._warning on failure.
         """
@@ -289,39 +295,43 @@ class LQRController(Controller):
                 (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
                 * sim_params.gravity
             )
-            damping = sim_params.damping
-            wheel_damping = sim_params.wheel_damping
 
-            # Linearized A matrix for state [theta, theta_dot, phi_dot]
-            # Row 0: theta_dot = theta_dot
-            # Row 1: theta_ddot = (M22*f1 - M12*f2) / det
-            # Row 2: phi_ddot   = (M11*f2 - M12*f1) / det
-            #
-            # f1 = gravity_coeff*theta - u - damping*theta_dot
-            # f2 = u - wheel_damping*phi_dot
-            #
-            # Linearized (sin(theta) ≈ theta):
+            # Extract electro-mechanical parameters
+            N = sim_params.gear_ratio
+            Kt = sim_params.motor_constant
+            Ke = sim_params.motor_constant  # Kt = Ke by convention
+            R = sim_params.motor_resistance
+            L = sim_params.motor_inductance
+            b = sim_params.damping
+            b_w_eff = sim_params.wheel_damping + N ** 2 * sim_params.motor_viscous_friction
+
+            # Linearized A matrix for state [theta, theta_dot, phi_dot, i_a]
+            # Mechanical rows derived from M @ [theta_ddot, phi_ddot] = f
+            # with motor torque tau_m = Kt * i_a, wheel torque = N * Kt * i_a.
+            # Electrical row: di/dt = V/L - R*i/L - Ke*N*phi_dot/L
             A = np.array([
-                [0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
                 [
                     M22 * gravity_coeff / det,
-                    -M22 * damping / det,
-                    M12 * wheel_damping / det,
+                    -M22 * b / det,
+                    M12 * b_w_eff / det,
+                    -(M22 + M12) * N * Kt / det,
                 ],
                 [
                     -M12 * gravity_coeff / det,
-                    M12 * damping / det,
-                    -M11 * wheel_damping / det,
+                    M12 * b / det,
+                    -M11 * b_w_eff / det,
+                    (M11 + M12) * N * Kt / det,
                 ],
+                [0.0, 0.0, -Ke * N / L, -R / L],
             ], dtype=np.float64)
 
-            # Linearized B matrix
-            # Coefficient of u in theta_ddot: (-M22 - M12) / det
-            # Coefficient of u in phi_ddot:   ( M11 + M12) / det
+            # Linearized B matrix (voltage input enters only the electrical equation)
             B = np.array([
                 [0.0],
-                [-(M22 + M12) / det],
-                [(M11 + M12) / det],
+                [0.0],
+                [0.0],
+                [1.0 / L],
             ], dtype=np.float64)
 
             # Weight matrices
@@ -329,14 +339,15 @@ class LQRController(Controller):
                 ctrl_params.lqr_q_theta,
                 ctrl_params.lqr_q_theta_dot,
                 ctrl_params.lqr_q_phi_dot,
+                ctrl_params.lqr_q_current,
             ]).astype(np.float64)
-            R = np.array([[ctrl_params.lqr_r]], dtype=np.float64)
+            R_lqr = np.array([[ctrl_params.lqr_r]], dtype=np.float64)
 
             # Solve continuous algebraic Riccati equation
-            P = solve_continuous_are(A, B, Q, R)
+            P = solve_continuous_are(A, B, Q, R_lqr)
 
-            # Optimal gain: K = R^{-1} B^T P
-            K = np.linalg.solve(R, B.T @ P)
+            # Optimal gain: K = R_lqr^{-1} B^T P
+            K = np.linalg.solve(R_lqr, B.T @ P)
 
             if not np.all(np.isfinite(K)):
                 raise ValueError(f"Non-finite LQR gains: {K}")
@@ -370,11 +381,12 @@ class LQRController(Controller):
             self._last_sim_params = sim_params.model_copy()
             self._last_ctrl_params = ctrl_params.model_copy()
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
@@ -384,15 +396,15 @@ class LQRController(Controller):
 
         if self._gain is None:
             # Fallback to PID
-            return self._pid_fallback.compute_torque(
-                theta, theta_dot, phi_dot, energy, time, sim_params, ctrl_params
+            return self._pid_fallback.compute_voltage(
+                theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
             )
 
-        # State feedback: u = -K @ x
-        x = np.array([theta, theta_dot, phi_dot], dtype=np.float64)
-        u = float(-self._gain @ x)
+        # State feedback: V = -K @ [theta, theta_dot, phi_dot, i_a]
+        x = np.array([theta, theta_dot, phi_dot, current], dtype=np.float64)
+        v = float(-self._gain @ x)
 
-        return self._clamp(u, sim_params.max_motor_torque)
+        return self._clamp_voltage(v, sim_params.max_voltage)
 
 
 # ---------------------------------------------------------------------------
@@ -403,16 +415,16 @@ class LQRController(Controller):
 class EnergySwingUpController(Controller):
     """Energy-based swing-up with LQR/PID balance near upright.
 
-    Away from upright, commands torque to pump mechanical energy toward
+    Away from upright, commands voltage to pump mechanical energy toward
     the upright energy level (E_target = 0). The control law is:
 
-        u = gain * (E_target - E) * phi_dot
+        V = gain * (E_target - E) * phi_dot
 
-    which ensures motor power (u * phi_dot) is positive when energy is
-    below target, driving the system toward upright.
+    which ensures motor power (V * i_a) drives energy toward the target
+    when the wheel is spinning.
 
     When |phi_dot| is too small to transfer meaningful power, a bounded
-    phase-based excitation torque is added to spin the wheel.
+    phase-based excitation voltage is added to spin the wheel.
 
     Near upright (within configurable angle and velocity thresholds),
     the controller switches to LQR (preferred) or PID for fine balance.
@@ -420,7 +432,7 @@ class EnergySwingUpController(Controller):
 
     # Minimum |phi_dot| below which excitation is applied [rad/s]
     _PHI_DOT_EXCITATION_THRESHOLD: float = 0.5
-    # Maximum excitation torque as fraction of max_motor_torque
+    # Maximum excitation voltage as fraction of max_voltage
     _EXCITATION_FRACTION: float = 0.3
 
     def __init__(self) -> None:
@@ -449,23 +461,24 @@ class EnergySwingUpController(Controller):
             and abs(theta_dot) < ctrl_params.upright_velocity_threshold
         )
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> float:
-        max_torque = sim_params.max_motor_torque
+        max_voltage = sim_params.max_voltage
 
         # Near upright: switch to balance controller.
         # LQR handles its own PID fallback internally if gain is unavailable.
         if self._is_near_upright(theta, theta_dot, ctrl_params):
-            return self._lqr.compute_torque(
-                theta, theta_dot, phi_dot, energy, time, sim_params, ctrl_params
+            return self._lqr.compute_voltage(
+                theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
             )
 
         # Energy swing-up region
@@ -475,8 +488,8 @@ class EnergySwingUpController(Controller):
 
         gain = ctrl_params.energy_swing_up_gain
 
-        # Primary energy-pumping law: u = gain * e_error * phi_dot
-        u_energy = gain * e_error * phi_dot
+        # Primary energy-pumping law: V = gain * e_error * phi_dot
+        v_energy = gain * e_error * phi_dot
 
         # Phase-based excitation when wheel speed is too low
         if abs(phi_dot) < self._PHI_DOT_EXCITATION_THRESHOLD:
@@ -484,13 +497,13 @@ class EnergySwingUpController(Controller):
             # sin(theta) > 0 means pendulum is on the positive side;
             # excite the wheel to build angular momentum in a direction
             # that will pump energy on the next swing.
-            excitation_amplitude = self._EXCITATION_FRACTION * max_torque
+            excitation_amplitude = self._EXCITATION_FRACTION * max_voltage
             # Direction: push wheel to create reaction that aids swing-up
             excitation_dir = math.copysign(1.0, math.sin(theta)) if abs(math.sin(theta)) > 1e-6 else 1.0
-            u_excitation = excitation_amplitude * excitation_dir
-            u_energy += u_excitation
+            v_excitation = excitation_amplitude * excitation_dir
+            v_energy += v_excitation
 
-        return self._clamp(u_energy, max_torque)
+        return self._clamp_voltage(v_energy, max_voltage)
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +518,7 @@ class SlidingModeController(Controller):
         s = c1 * theta + c2 * theta_dot + c3 * phi_dot
 
     The control law uses a boundary-layer approximation to reduce chattering:
-        u = -K * sat(s / boundary) - eta * s
+        V = -K * sat(s / boundary) - eta * s
 
     where sat() is the saturation function (linear within the boundary layer,
     sign outside). This provides robustness to parameter uncertainty while
@@ -515,11 +528,12 @@ class SlidingModeController(Controller):
     def reset(self) -> None:
         pass
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
         sim_params: SimulationParameters,
@@ -531,7 +545,7 @@ class SlidingModeController(Controller):
         k = ctrl_params.smc_k
         eta = ctrl_params.smc_eta
         boundary = ctrl_params.smc_boundary
-        max_torque = sim_params.max_motor_torque
+        max_voltage = sim_params.max_voltage
 
         # Sliding surface
         s = c1 * theta + c2 * theta_dot + c3 * phi_dot
@@ -544,9 +558,9 @@ class SlidingModeController(Controller):
             sat_val = 1.0 if s_normalized > 0 else -1.0
 
         # Control law
-        u = -k * sat_val - eta * s
+        v = -k * sat_val - eta * s
 
-        return self._clamp(u, max_torque)
+        return self._clamp_voltage(v, max_voltage)
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +583,7 @@ class ControllerManager:
         self._sim_params: SimulationParameters = sim_params.model_copy()
         self._ctrl_params: ControlParameters = ctrl_params.model_copy()
         self._mode: ControlMode = ControlMode.none
-        self._manual_torque: float = 0.0
+        self._manual_voltage: float = 0.0
 
         # Instantiate all controllers
         self._no_controller: NoController = NoController()
@@ -608,10 +622,10 @@ class ControllerManager:
             self._mode = mode
             self._get_active_controller().reset()
 
-    def set_manual_torque(self, torque: float) -> None:
-        """Update the manual torque setpoint."""
-        self._manual_torque = torque
-        self._manual_controller.set_torque(torque)
+    def set_manual_voltage(self, voltage: float) -> None:
+        """Update the manual voltage setpoint."""
+        self._manual_voltage = voltage
+        self._manual_controller.set_voltage(voltage)
 
     def update_control_params(self, ctrl_params: ControlParameters) -> None:
         """Live-update control gains without resetting integrators.
@@ -637,7 +651,7 @@ class ControllerManager:
         self._lqr_controller.reset()
         self._energy_controller.reset()
         self._smc_controller.reset()
-        self._manual_torque = 0.0
+        self._manual_voltage = 0.0
 
     def reset_active(self) -> None:
         """Reset only the currently active controller."""
@@ -647,15 +661,16 @@ class ControllerManager:
     # Torque computation
     # ------------------------------------------------------------------
 
-    def compute_torque(
+    def compute_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
+        current: float,
         energy: float,
         time: float,
     ) -> float:
-        """Delegate torque computation to the active controller.
+        """Delegate voltage computation to the active controller.
 
         Parameters
         ----------
@@ -665,6 +680,8 @@ class ControllerManager:
             Pendulum angular velocity [rad/s].
         phi_dot : float
             Relative wheel angular velocity [rad/s].
+        current : float
+            Armature current [A].
         energy : float
             Total mechanical energy (upright-referenced) [J].
         time : float
@@ -673,11 +690,11 @@ class ControllerManager:
         Returns
         -------
         float
-            Motor torque command clamped to actuator limits.
+            Voltage command [V] clamped to [-max_voltage, max_voltage].
         """
         controller = self._get_active_controller()
-        return controller.compute_torque(
-            theta, theta_dot, phi_dot, energy, time,
+        return controller.compute_voltage(
+            theta, theta_dot, phi_dot, current, energy, time,
             self._sim_params, self._ctrl_params,
         )
 

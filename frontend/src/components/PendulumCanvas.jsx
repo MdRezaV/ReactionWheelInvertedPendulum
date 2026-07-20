@@ -5,13 +5,14 @@ const CANVAS_SIZE = 280
 export default function PendulumCanvas({ latest }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
-  const stateRef = useRef({ theta: 0, phi_dot: 0, torque: 0, wheelAngle: 0, lastTime: 0 })
+  const stateRef = useRef({ theta: 0, phi_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0 })
 
   useEffect(() => {
     if (latest) {
       stateRef.current.theta = latest.theta
       stateRef.current.phi_dot = latest.phi_dot
-      stateRef.current.torque = latest.torque ?? 0
+      stateRef.current.voltage = latest.voltage ?? 0
+      stateRef.current.current = latest.current ?? 0
     }
   }, [latest])
 
@@ -37,7 +38,7 @@ export default function PendulumCanvas({ latest }) {
       const armLength = 100
       const wheelRadius = 18
 
-      const { theta, phi_dot, torque } = stateRef.current
+      const { theta, phi_dot, voltage, current } = stateRef.current
 
       // Advance wheel visual angle using real frame delta
       const dt = stateRef.current.lastTime > 0
@@ -122,10 +123,10 @@ export default function PendulumCanvas({ latest }) {
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Torque indicator arrow at wheel
-      if (Math.abs(torque) > 0.01) {
-        const arrowDir = torque > 0 ? 1 : -1
-        const arrowLen = Math.min(Math.abs(torque) * 20, 30)
+      // Voltage indicator arrow at wheel
+      if (Math.abs(voltage) > 0.01) {
+        const arrowDir = voltage > 0 ? 1 : -1
+        const arrowLen = Math.min(Math.abs(voltage) * 2, 30)
         ctx.strokeStyle = '#e57373'
         ctx.lineWidth = 2
         ctx.beginPath()
@@ -148,7 +149,8 @@ export default function PendulumCanvas({ latest }) {
       ctx.textAlign = 'left'
       ctx.fillText(`θ = ${(theta * 180 / Math.PI).toFixed(1)}°`, 8, 16)
       ctx.fillText(`φ̇ = ${phi_dot.toFixed(1)} rad/s`, 8, 30)
-      ctx.fillText(`τ = ${torque.toFixed(3)} N·m`, 8, 44)
+      ctx.fillText(`V = ${voltage.toFixed(2)} V`, 8, 44)
+      ctx.fillText(`i = ${current.toFixed(3)} A`, 8, 58)
 
       animRef.current = requestAnimationFrame(draw)
     }
