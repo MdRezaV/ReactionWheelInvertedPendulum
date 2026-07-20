@@ -62,6 +62,7 @@ export default function ControlPanel({
   const [activeTab, setActiveTab] = useState('controls')
   const [manualTorque, setManualTorque] = useState(0)
   const [speed, setSpeed] = useState(1.0)
+  const speedSliderVal = Math.log10(Math.max(speed, 0.001))
   const [selectedMode, setSelectedMode] = useState(status?.control_mode || 'none')
 
   useEffect(() => {
@@ -170,14 +171,14 @@ export default function ControlPanel({
 
           <div className="flex flex-col gap-1">
             <label className="text-[13px] text-text-dim font-bold">
-              سرعت شبیه‌سازی: <span className="text-accent font-mono">{toPersianDigits(speed.toFixed(1))} برابر</span>
+              سرعت شبیه‌سازی: <span className="text-accent font-mono">{toPersianDigits(speed < 0.01 ? speed.toFixed(3) : speed < 0.1 ? speed.toFixed(2) : speed.toFixed(1))} برابر</span>
             </label>
             <Slider.Root
-              value={[speed]}
-              min={0.1}
-              max={5}
-              step={0.1}
-              onValueChange={([v]) => { setSpeed(v); onSetSpeed(v) }}
+              value={[speedSliderVal]}
+              min={-3}
+              max={0.699}
+              step={0.01}
+              onValueChange={([v]) => { const s = Math.pow(10, v); setSpeed(s); onSetSpeed(s) }}
               dir="rtl"
               className="relative flex items-center h-4 select-none touch-none"
             >
@@ -186,6 +187,11 @@ export default function ControlPanel({
               </Slider.Track>
               <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
             </Slider.Root>
+            <div className="flex justify-between text-[10px] text-text-dim/50 px-0.5">
+              <span>۰٫۰۰۱×</span>
+              <span>۱×</span>
+              <span>۵×</span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1">

@@ -50,7 +50,7 @@ export default function StatusBar({ status, connected, warnings, fps, bytesPerSe
       <span className="text-accent font-medium">{modeText}</span>
 
       {status?.speed_multiplier && status.speed_multiplier !== 1.0 && (
-        <span className="text-warning font-mono">{toPersianDigits(status.speed_multiplier.toFixed(1))} برابر</span>
+        <span className="text-warning font-mono">{toPersianDigits(status.speed_multiplier < 0.01 ? status.speed_multiplier.toFixed(3) : status.speed_multiplier < 0.1 ? status.speed_multiplier.toFixed(2) : status.speed_multiplier.toFixed(1))} برابر</span>
       )}
 
       <div className="flex-1" />
