@@ -92,7 +92,7 @@ export default function ControlPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+              <Tabs.Root value={activeTab} onValueChange={setActiveTab} dir="rtl" className="flex flex-col h-full">
         <Tabs.List className="flex border-b border-border bg-surface/60">
           {TABS.map((tab) => (
             <Tabs.Trigger
@@ -118,7 +118,7 @@ export default function ControlPanel({
 
           <div className="flex flex-col gap-1">
             <label className="text-[13px] text-text-dim font-bold">حالت کنترل</label>
-            <Select.Root value={selectedMode} onValueChange={(mode) => { setSelectedMode(mode); onSetMode(mode) }}>
+            <Select.Root value={selectedMode} onValueChange={(mode) => { setSelectedMode(mode); onSetMode(mode) }} dir="rtl">
               <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
                 <Select.Value />
                 <Select.Icon className="text-text-dim">
@@ -135,7 +135,7 @@ export default function ControlPanel({
                         className="flex items-center px-2.5 py-1.5 text-[14px] rounded-sm text-text cursor-pointer outline-none data-[highlighted]:bg-accent-dim data-[highlighted]:text-accent data-[state=checked]:text-accent"
                       >
                         <Select.ItemText>{m.label}</Select.ItemText>
-                        <Select.ItemIndicator className="mr-auto pl-1">
+                        <Select.ItemIndicator className="ms-auto pe-1">
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </Select.ItemIndicator>
                       </Select.Item>
@@ -157,6 +157,7 @@ export default function ControlPanel({
                 max={12}
                 step={0.1}
                 onValueChange={([v]) => { setManualTorque(v); onSetManualVoltage(v) }}
+                dir="rtl"
                 className="relative flex items-center h-4 select-none touch-none"
               >
                 <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
@@ -177,6 +178,7 @@ export default function ControlPanel({
               max={5}
               step={0.1}
               onValueChange={([v]) => { setSpeed(v); onSetSpeed(v) }}
+              dir="rtl"
               className="relative flex items-center h-4 select-none touch-none"
             >
               <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
@@ -213,6 +215,7 @@ export default function ControlPanel({
                     max={p.max}
                     step={p.step}
                     onValueChange={([v]) => handleParamChange('simulation', p.key, String(v))}
+                    dir="rtl"
                     className="relative flex items-center h-4 flex-1 select-none touch-none"
                   >
                     <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
@@ -259,6 +262,7 @@ export default function ControlPanel({
                     max={p.max}
                     step={p.step}
                     onValueChange={([v]) => handleParamChange('control', p.key, String(v))}
+                    dir="rtl"
                     className="relative flex items-center h-4 flex-1 select-none touch-none"
                   >
                     <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
