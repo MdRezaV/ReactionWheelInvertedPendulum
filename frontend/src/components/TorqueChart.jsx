@@ -43,7 +43,7 @@ export default function TorqueChart({ getBuffer }) {
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
-      ctx.fillStyle = '#1a1a2e'
+      ctx.fillStyle = '#12121f'
       ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH)
 
       ctx.strokeStyle = '#2a2a4a'
@@ -65,7 +65,6 @@ export default function TorqueChart({ getBuffer }) {
       const tStart = buffer[0].time
       const tRange = Math.max(tEnd - tStart, 0.001)
 
-      // Each series gets its own normalized scale (stacked display)
       for (const series of SERIES) {
         let yMin = Infinity
         let yMax = -Infinity
@@ -93,9 +92,8 @@ export default function TorqueChart({ getBuffer }) {
         ctx.stroke()
       }
 
-      // Time axis
       ctx.fillStyle = '#888'
-      ctx.font = '10px monospace'
+      ctx.font = '10px Vazirmatn, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 4)
       ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 4)
@@ -104,19 +102,17 @@ export default function TorqueChart({ getBuffer }) {
     }
 
     animRef.current = requestAnimationFrame(draw)
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-    }
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
   }, [getBuffer])
 
   return (
-    <div className="chart-container">
-      <div className="chart-header">
-        <h3>Electrical & Wheel</h3>
-        <div className="chart-legend">
+    <div className="flex-1 min-w-[240px] rounded-xl border border-border bg-card overflow-hidden shadow-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-h">الکتریکی و چرخ</h3>
+        <div className="flex gap-3 flex-wrap">
           {SERIES.map((s) => (
-            <span key={s.key} className="legend-item">
-              <span className="legend-color" style={{ background: s.color }} />
+            <span key={s.key} className="flex items-center gap-1 text-[11px] text-text-dim">
+              <span className="w-2.5 h-[3px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
           ))}

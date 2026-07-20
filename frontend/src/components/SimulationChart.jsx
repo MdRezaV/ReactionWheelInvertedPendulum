@@ -44,11 +44,9 @@ export default function SimulationChart({ getBuffer }) {
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
-      // Background
-      ctx.fillStyle = '#1a1a2e'
+      ctx.fillStyle = '#12121f'
       ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH)
 
-      // Grid lines
       ctx.strokeStyle = '#2a2a4a'
       ctx.lineWidth = 0.5
       for (let i = 0; i <= 4; i++) {
@@ -64,14 +62,11 @@ export default function SimulationChart({ getBuffer }) {
         return
       }
 
-      // Compute time range
       const tEnd = buffer[buffer.length - 1].time
       const tStart = buffer[0].time
       const tRange = Math.max(tEnd - tStart, 0.001)
 
-      // Draw each series
       for (const series of SERIES_CONFIG) {
-        // Auto-scale Y
         let yMin = Infinity
         let yMax = -Infinity
         for (const pt of buffer) {
@@ -87,26 +82,22 @@ export default function SimulationChart({ getBuffer }) {
         ctx.strokeStyle = series.color
         ctx.lineWidth = 1.5
         ctx.beginPath()
-
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
           const x = PADDING.left + ((pt.time - tStart) / tRange) * plotW
           const y = PADDING.top + plotH - ((pt[series.key] - yMin) / yRange) * plotH
-
           if (i === 0) ctx.moveTo(x, y)
           else ctx.lineTo(x, y)
         }
         ctx.stroke()
       }
 
-      // Y-axis labels (normalized: each series auto-scaled independently)
       ctx.fillStyle = '#666'
-      ctx.font = '9px monospace'
+      ctx.font = '9px Vazirmatn, monospace'
       ctx.textAlign = 'right'
       ctx.fillText('auto', PADDING.left - 4, PADDING.top + 8)
       ctx.fillText('scale', PADDING.left - 4, PADDING.top + plotH - 2)
 
-      // Time axis
       ctx.textAlign = 'center'
       ctx.fillText(`${tStart.toFixed(1)}s`, PADDING.left, h - 4)
       ctx.fillText(`${tEnd.toFixed(1)}s`, PADDING.left + plotW, h - 4)
@@ -115,19 +106,17 @@ export default function SimulationChart({ getBuffer }) {
     }
 
     animRef.current = requestAnimationFrame(draw)
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-    }
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
   }, [getBuffer])
 
   return (
-    <div className="chart-container">
-      <div className="chart-header">
-        <h3>Time Series</h3>
-        <div className="chart-legend">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-h">سری زمانی</h3>
+        <div className="flex gap-3 flex-wrap">
           {SERIES_CONFIG.map((s) => (
-            <span key={s.key} className="legend-item">
-              <span className="legend-color" style={{ background: s.color }} />
+            <span key={s.key} className="flex items-center gap-1 text-[11px] text-text-dim">
+              <span className="w-2.5 h-[3px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
           ))}

@@ -21,15 +21,15 @@ const FIELDS = [
 
 export default function NumericReadout({ latest }) {
   return (
-    <div className="chart-container">
-      <div className="chart-header">
-        <h3>Live Values</h3>
+    <div className="flex-1 min-w-[240px] rounded-xl border border-border bg-card overflow-hidden shadow-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-h">مقادیر زنده</h3>
       </div>
-      <div className="readout-grid">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-px bg-border">
         {FIELDS.map((f) => (
-          <div key={f.key} className="readout-cell">
-            <span className="readout-label">{f.label}</span>
-            <span className="readout-value">
+          <div key={f.key} className="flex flex-col px-2.5 py-1.5 bg-card">
+            <span className="text-[10px] text-text-dim font-bold uppercase">{f.label}</span>
+            <span className="text-xs font-mono text-text-h mt-0.5" dir="ltr">
               {latest ? f.format(latest[f.key] ?? 0) : '—'}
             </span>
           </div>

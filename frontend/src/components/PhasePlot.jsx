@@ -17,9 +17,7 @@ export default function PhasePlot({ getBuffer }) {
   const [axisPair, setAxisPair] = useState(0)
   const axisRef = useRef(0)
 
-  useEffect(() => {
-    axisRef.current = axisPair
-  }, [axisPair])
+  useEffect(() => { axisRef.current = axisPair }, [axisPair])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,11 +47,9 @@ export default function PhasePlot({ getBuffer }) {
       const plotW = w - PADDING * 2
       const plotH = h - PADDING * 2
 
-      // Background
-      ctx.fillStyle = '#1a1a2e'
+      ctx.fillStyle = '#12121f'
       ctx.fillRect(PADDING, PADDING, plotW, plotH)
 
-      // Axes
       ctx.strokeStyle = '#3a3a5a'
       ctx.lineWidth = 1
       ctx.beginPath()
@@ -73,7 +69,6 @@ export default function PhasePlot({ getBuffer }) {
       const xKey = axes.x
       const yKey = axes.y
 
-      // Auto-scale
       let xMin = Infinity, xMax = -Infinity
       let yMin = Infinity, yMax = -Infinity
       for (const pt of buffer) {
@@ -91,7 +86,6 @@ export default function PhasePlot({ getBuffer }) {
       const xHalf = xRange / 2 * 1.2
       const yHalf = yRange / 2 * 1.2
 
-      // Draw trajectory with fading
       const len = buffer.length
       for (let i = 1; i < len; i++) {
         const alpha = 0.2 + 0.8 * (i / len)
@@ -108,7 +102,6 @@ export default function PhasePlot({ getBuffer }) {
         ctx.stroke()
       }
 
-      // Current point
       const last = buffer[len - 1]
       const cx = PADDING + ((last[xKey] - (xMid - xHalf)) / (2 * xHalf)) * plotW
       const cy = PADDING + plotH - ((last[yKey] - (yMid - yHalf)) / (2 * yHalf)) * plotH
@@ -117,9 +110,8 @@ export default function PhasePlot({ getBuffer }) {
       ctx.arc(cx, cy, 4, 0, Math.PI * 2)
       ctx.fill()
 
-      // Labels
       ctx.fillStyle = '#888'
-      ctx.font = '10px monospace'
+      ctx.font = '10px Vazirmatn, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(xKey, PADDING + plotW / 2, h - 6)
       ctx.save()
@@ -132,20 +124,18 @@ export default function PhasePlot({ getBuffer }) {
     }
 
     animRef.current = requestAnimationFrame(draw)
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-    }
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
   }, [getBuffer])
 
   return (
-    <div className="chart-container">
-      <div className="chart-header">
-        <h3>Phase Portrait</h3>
+    <div className="flex-1 min-w-[240px] rounded-xl border border-border bg-card overflow-hidden shadow-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-h">نمودار فاز</h3>
         <select
           value={axisPair}
           onChange={(e) => setAxisPair(Number(e.target.value))}
-          className="mode-select"
-          style={{ padding: '2px 6px', fontSize: '11px' }}
+          className="px-2 py-0.5 text-[11px] rounded border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none"
+          dir="ltr"
         >
           {AXIS_OPTIONS.map((opt, i) => (
             <option key={i} value={i}>{opt.label}</option>

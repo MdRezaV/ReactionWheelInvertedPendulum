@@ -40,7 +40,6 @@ export default function PendulumCanvas({ latest }) {
 
       const { theta, phi_dot, voltage, current } = stateRef.current
 
-      // Advance wheel visual angle using real frame delta
       const dt = stateRef.current.lastTime > 0
         ? Math.min((timestamp - stateRef.current.lastTime) / 1000, 0.05)
         : 0.016
@@ -48,15 +47,12 @@ export default function PendulumCanvas({ latest }) {
       stateRef.current.wheelAngle += phi_dot * dt
       const wheelAngle = stateRef.current.wheelAngle
 
-      // Pendulum tip position (theta=0 is upright)
       const tipX = cx + armLength * Math.sin(theta)
       const tipY = cy - armLength * Math.cos(theta)
 
-      // Draw pivot mount
-      ctx.fillStyle = '#555'
+      ctx.fillStyle = '#3a3a5a'
       ctx.fillRect(cx - 20, cy, 40, 12)
 
-      // Draw arm
       ctx.strokeStyle = '#b0bec5'
       ctx.lineWidth = 4
       ctx.lineCap = 'round'
@@ -65,25 +61,21 @@ export default function PendulumCanvas({ latest }) {
       ctx.lineTo(tipX, tipY)
       ctx.stroke()
 
-      // Draw pivot
       ctx.fillStyle = '#78909c'
       ctx.beginPath()
       ctx.arc(cx, cy, 6, 0, Math.PI * 2)
       ctx.fill()
 
-      // Draw reaction wheel
       ctx.save()
       ctx.translate(tipX, tipY)
       ctx.rotate(wheelAngle)
 
-      // Wheel body
       ctx.strokeStyle = '#4fc3f7'
       ctx.lineWidth = 3
       ctx.beginPath()
       ctx.arc(0, 0, wheelRadius, 0, Math.PI * 2)
       ctx.stroke()
 
-      // Wheel spokes
       ctx.strokeStyle = '#4fc3f788'
       ctx.lineWidth = 1.5
       for (let i = 0; i < 4; i++) {
@@ -94,15 +86,12 @@ export default function PendulumCanvas({ latest }) {
         ctx.stroke()
       }
 
-      // Hub
       ctx.fillStyle = '#4fc3f7'
       ctx.beginPath()
       ctx.arc(0, 0, 4, 0, Math.PI * 2)
       ctx.fill()
-
       ctx.restore()
 
-      // Draw angle arc
       if (Math.abs(theta) > 0.01) {
         ctx.strokeStyle = '#ffb74d88'
         ctx.lineWidth = 1.5
@@ -113,7 +102,6 @@ export default function PendulumCanvas({ latest }) {
         ctx.stroke()
       }
 
-      // Upright reference line (dashed)
       ctx.strokeStyle = '#ffffff22'
       ctx.lineWidth = 1
       ctx.setLineDash([4, 4])
@@ -123,7 +111,6 @@ export default function PendulumCanvas({ latest }) {
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Voltage indicator arrow at wheel
       if (Math.abs(voltage) > 0.01) {
         const arrowDir = voltage > 0 ? 1 : -1
         const arrowLen = Math.min(Math.abs(voltage) * 2, 30)
@@ -133,7 +120,6 @@ export default function PendulumCanvas({ latest }) {
         ctx.moveTo(tipX, tipY - wheelRadius - 5)
         ctx.lineTo(tipX + arrowDir * arrowLen, tipY - wheelRadius - 5)
         ctx.stroke()
-        // Arrowhead
         ctx.beginPath()
         ctx.moveTo(tipX + arrowDir * arrowLen, tipY - wheelRadius - 5)
         ctx.lineTo(tipX + arrowDir * (arrowLen - 5), tipY - wheelRadius - 9)
@@ -143,9 +129,8 @@ export default function PendulumCanvas({ latest }) {
         ctx.fill()
       }
 
-      // Angle text
       ctx.fillStyle = '#aaa'
-      ctx.font = '11px monospace'
+      ctx.font = '11px Vazirmatn, monospace'
       ctx.textAlign = 'left'
       ctx.fillText(`θ = ${(theta * 180 / Math.PI).toFixed(1)}°`, 8, 16)
       ctx.fillText(`φ̇ = ${phi_dot.toFixed(1)} rad/s`, 8, 30)
@@ -156,15 +141,13 @@ export default function PendulumCanvas({ latest }) {
     }
 
     animRef.current = requestAnimationFrame(draw)
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-    }
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
   }, [])
 
   return (
-    <div className="chart-container">
-      <div className="chart-header">
-        <h3>Pendulum</h3>
+    <div className="flex-1 min-w-[240px] rounded-xl border border-border bg-card overflow-hidden shadow-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-h">پاندول</h3>
       </div>
       <canvas
         ref={canvasRef}
