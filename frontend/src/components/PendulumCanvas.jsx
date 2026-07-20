@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react'
 
 const CANVAS_SIZE = 280
-const PX_PER_METER = 150
 const MIN_ARM_PX = 8
 const MIN_WHEEL_PX = 4
+const USABLE_RADIUS_PX = 95
+const MIN_SCALE = 30
+const MAX_SCALE = 400
 
 export default function PendulumCanvas({ latest, params }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const stateRef = useRef({ theta: 0, phi_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0 })
-  const dimsRef = useRef({ armLength: 0.3 * PX_PER_METER, wheelRadius: 0.05 * PX_PER_METER })
+  const dimsRef = useRef({ armLength: 80, wheelRadius: 13 })
 
   useEffect(() => {
     if (latest) {
@@ -24,8 +26,9 @@ export default function PendulumCanvas({ latest, params }) {
     if (params?.simulation) {
       const len = params.simulation.pendulum_length ?? 0.3
       const rad = params.simulation.wheel_radius ?? 0.05
-      dimsRef.current.armLength = Math.max(len * PX_PER_METER, MIN_ARM_PX)
-      dimsRef.current.wheelRadius = Math.max(rad * PX_PER_METER, MIN_WHEEL_PX)
+      const scale = Math.min(Math.max(USABLE_RADIUS_PX / (len + rad), MIN_SCALE), MAX_SCALE)
+      dimsRef.current.armLength = Math.max(len * scale, MIN_ARM_PX)
+      dimsRef.current.wheelRadius = Math.max(rad * scale, MIN_WHEEL_PX)
     }
   }, [params])
 
