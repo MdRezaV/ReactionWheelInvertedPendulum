@@ -29,15 +29,14 @@ export function useSimulationSocket() {
   const applyDelta = useCallback((delta) => {
     const base = lastFullRef.current
     if (!base) return null
-    const sample = [...base]
     for (const [idx, val] of delta) {
-      sample[idx] = val
+      base[idx] = val
     }
-    return sample
+    return base
   }, [])
 
-  const sampleToObject = useCallback((arr) => {
-    const obj = {}
+  const sampleToObject = useCallback((arr, target) => {
+    const obj = target || {}
     for (let i = 0; i < 16; i++) {
       obj[FIELD_NAMES[i]] = arr[i]
     }
@@ -45,29 +44,37 @@ export function useSimulationSocket() {
     return obj
   }, [])
 
+  const latestObjRef = useRef({})
+
   const handleMessage = useCallback((msg) => {
     if (msg.t === 0) {
+      let lastValid = null
       if (msg.full) {
         for (const sample of msg.data) {
           lastFullRef.current = sample
           const obj = sampleToObject(sample)
           if (!Number.isFinite(obj.theta) || !Number.isFinite(obj.theta_dot)) continue
           bufferRef.current.push(obj)
-          setLatest(obj)
+          lastValid = obj
         }
       } else {
         for (const delta of msg.data) {
           const sample = applyDelta(delta)
           if (!sample) continue
-          lastFullRef.current = sample
           const obj = sampleToObject(sample)
           if (!Number.isFinite(obj.theta) || !Number.isFinite(obj.theta_dot)) continue
           bufferRef.current.push(obj)
-          setLatest(obj)
+          lastValid = obj
         }
       }
-      if (bufferRef.current.length > MAX_BUFFER_SIZE) {
-        bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_SIZE)
+      if (lastValid) {
+        const t = latestObjRef.current
+        for (const k in lastValid) t[k] = lastValid[k]
+        setLatest(t)
+      }
+      const excess = bufferRef.current.length - MAX_BUFFER_SIZE
+      if (excess > 0) {
+        bufferRef.current.splice(0, excess)
       }
     } else if (msg.t === 1) {
       setStatus({

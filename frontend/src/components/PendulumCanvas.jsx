@@ -9,7 +9,8 @@ const MAX_SCALE = 400
 export default function PendulumCanvas({ latest, params }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
-  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, trail: [] })
+  const TRAIL_LEN = 28
+  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
   const dimsRef = useRef({ armLength: 70, wheelRadius: 12 })
 
   useEffect(() => {
@@ -77,9 +78,11 @@ export default function PendulumCanvas({ latest, params }) {
       const tipX = cx + armLength * Math.sin(theta)
       const tipY = cy - armLength * Math.cos(theta)
 
-      const trail = stateRef.current.trail
-      trail.push({ x: tipX, y: tipY })
-      if (trail.length > 28) trail.shift()
+      const st = stateRef.current
+      st.trailX[st.trailHead] = tipX
+      st.trailY[st.trailHead] = tipY
+      st.trailHead = (st.trailHead + 1) % TRAIL_LEN
+      if (st.trailCount < TRAIL_LEN) st.trailCount++
 
       // Radial grid
       ctx.strokeStyle = '#ffffff08'
@@ -105,11 +108,14 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.fill()
 
       // Trail path (smooth quadratic curve with gradient fade)
-      if (trail.length > 2) {
-        const grad = ctx.createLinearGradient(
-          trail[0].x, trail[0].y,
-          trail[trail.length - 1].x, trail[trail.length - 1].y
-        )
+      const tc = st.trailCount
+      if (tc > 2) {
+        const tX = st.trailX
+        const tY = st.trailY
+        const head = st.trailHead
+        const oldest = (head - tc + TRAIL_LEN) % TRAIL_LEN
+        const newest = (head - 1 + TRAIL_LEN) % TRAIL_LEN
+        const grad = ctx.createLinearGradient(tX[oldest], tY[oldest], tX[newest], tY[newest])
         grad.addColorStop(0, 'rgba(86, 204, 242, 0)')
         grad.addColorStop(1, 'rgba(86, 204, 242, 0.45)')
         ctx.strokeStyle = grad
@@ -117,14 +123,15 @@ export default function PendulumCanvas({ latest, params }) {
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
         ctx.beginPath()
-        ctx.moveTo(trail[0].x, trail[0].y)
-        for (let i = 1; i < trail.length - 1; i++) {
-          const mx = (trail[i].x + trail[i + 1].x) / 2
-          const my = (trail[i].y + trail[i + 1].y) / 2
-          ctx.quadraticCurveTo(trail[i].x, trail[i].y, mx, my)
+        ctx.moveTo(tX[oldest], tY[oldest])
+        for (let i = 1; i < tc - 1; i++) {
+          const ci = (oldest + i) % TRAIL_LEN
+          const ni = (oldest + i + 1) % TRAIL_LEN
+          const mx = (tX[ci] + tX[ni]) / 2
+          const my = (tY[ci] + tY[ni]) / 2
+          ctx.quadraticCurveTo(tX[ci], tY[ci], mx, my)
         }
-        const last = trail[trail.length - 1]
-        ctx.lineTo(last.x, last.y)
+        ctx.lineTo(tX[newest], tY[newest])
         ctx.stroke()
       }
 
