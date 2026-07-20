@@ -33,6 +33,9 @@ export function useSimulationSocket() {
       try {
         const data = JSON.parse(event.data)
         if (data.theta !== undefined) {
+          if (!Number.isFinite(data.theta) || !Number.isFinite(data.theta_dot)) {
+            return
+          }
           bufferRef.current.push(data)
           if (bufferRef.current.length > MAX_BUFFER_SIZE) {
             bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_SIZE)

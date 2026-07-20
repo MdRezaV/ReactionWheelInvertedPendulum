@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const SIZE = 220
 const PADDING = 30
+const MIN_FRAME_MS = 33
 
 const AXIS_OPTIONS = [
   { x: 'theta', y: 'theta_dot', label: 'θ vs θ̇' },
@@ -24,8 +25,14 @@ export default function PhasePlot({ getBuffer }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    let lastDraw = 0
 
-    const draw = () => {
+    const draw = (timestamp) => {
+      if (timestamp - lastDraw < MIN_FRAME_MS) {
+        animRef.current = requestAnimationFrame(draw)
+        return
+      }
+      lastDraw = timestamp
       const dpr = window.devicePixelRatio || 1
       const rect = canvas.getBoundingClientRect()
       const w = rect.width

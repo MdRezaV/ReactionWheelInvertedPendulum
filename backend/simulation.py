@@ -292,6 +292,16 @@ class Simulation:
         return self._time
 
     @property
+    def time_step(self) -> float:
+        """Current integration time step [s] (no copy overhead)."""
+        return self._params.time_step
+
+    @property
+    def state_is_finite(self) -> bool:
+        """Whether all state values are finite (no NaN or Inf)."""
+        return bool(np.all(np.isfinite(self._state)))
+
+    @property
     def params(self) -> SimulationParameters:
         """Current simulation parameters (copy)."""
         return self._params.model_copy()

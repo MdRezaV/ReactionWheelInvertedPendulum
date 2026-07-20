@@ -403,13 +403,12 @@ class SimulationManager:
         alive so the manager stays responsive to external method calls.
         """
         loop = asyncio.get_event_loop()
-
         try:
             while not self._shutdown_event.is_set():
                 iteration_start = loop.time()
 
                 if self._status == SimulationStatus.running:
-                    dt = self._sim.params.time_step
+                    dt = self._sim.time_step
 
                     # Determine how many physics steps to take based on
                     # elapsed real time since the last iteration, scaled
@@ -419,23 +418,31 @@ class SimulationManager:
                     n_steps = max(1, min(n_steps, _MAX_CATCHUP_STEPS))
 
                     should_send = False
-                    for _ in range(n_steps):
-                        self._physics_step()
-                        if self._ws_manager.should_broadcast():
-                            should_send = True
+                    try:
+                        for _ in range(n_steps):
+                            self._physics_step()
+                            if self._ws_manager.should_broadcast():
+                                should_send = True
+                    except Exception:
+                        logger.exception("Error in physics step; pausing simulation.")
+                        self._status = SimulationStatus.paused
+                        self._warnings.append(
+                            "Simulation paused due to a computation error. "
+                            "Check parameters and reset."
+                        )
+                        should_send = False
 
                     if should_send and self._ws_manager.has_clients:
                         telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
                         self._last_telemetry = telemetry
                         await self._ws_manager.broadcast_telemetry(telemetry)
 
-                self._last_iteration_time = loop.time()
+                    self._last_iteration_time = loop.time()
 
                 # Pace the loop: sleep for approximately one physics step.
                 # When not running, use a longer idle sleep to reduce CPU.
                 if self._status == SimulationStatus.running:
-                    dt = self._sim.params.time_step
-                    sleep_time = dt - (loop.time() - iteration_start)
+                    sleep_time = self._sim.time_step - (loop.time() - iteration_start)
                     if sleep_time > 0:
                         await asyncio.sleep(sleep_time)
                     else:
@@ -466,6 +473,16 @@ class SimulationManager:
 
         self._sim.step(torque)
         self._last_torque = torque
+
+        # Guard against numerical blowup: if state contains NaN or Inf,
+        # reset to initial conditions to prevent permanent corruption.
+        if not self._sim.state_is_finite:
+            logger.warning("Non-finite state detected; resetting simulation.")
+            self._sim.reset()
+            self._ctrl_manager.reset_active()
+            self._warnings.append(
+                "Numerical instability detected; simulation was auto-reset."
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers

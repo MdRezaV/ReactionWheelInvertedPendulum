@@ -9,6 +9,7 @@ const SERIES_CONFIG = [
 
 const CHART_HEIGHT = 160
 const PADDING = { top: 10, right: 10, bottom: 20, left: 50 }
+const MIN_FRAME_MS = 33
 
 export default function SimulationChart({ getBuffer }) {
   const canvasRef = useRef(null)
@@ -18,8 +19,14 @@ export default function SimulationChart({ getBuffer }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    let lastDraw = 0
 
-    const draw = () => {
+    const draw = (timestamp) => {
+      if (timestamp - lastDraw < MIN_FRAME_MS) {
+        animRef.current = requestAnimationFrame(draw)
+        return
+      }
+      lastDraw = timestamp
       const dpr = window.devicePixelRatio || 1
       const rect = canvas.getBoundingClientRect()
       const w = rect.width
