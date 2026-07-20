@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import * as Select from '@radix-ui/react-select'
 import * as Slider from '@radix-ui/react-slider'
@@ -62,6 +62,13 @@ export default function ControlPanel({
   const [activeTab, setActiveTab] = useState('controls')
   const [manualTorque, setManualTorque] = useState(0)
   const [speed, setSpeed] = useState(1.0)
+  const [selectedMode, setSelectedMode] = useState(status?.control_mode || 'none')
+
+  useEffect(() => {
+    if (status?.control_mode) {
+      setSelectedMode(status.control_mode)
+    }
+  }, [status?.control_mode])
 
   const isRunning = status?.status === 'running'
   const isStopped = status?.status === 'stopped'
@@ -111,7 +118,7 @@ export default function ControlPanel({
 
           <div className="flex flex-col gap-1">
             <label className="text-[13px] text-text-dim font-bold">حالت کنترل</label>
-            <Select.Root value={status?.control_mode || 'none'} onValueChange={onSetMode}>
+            <Select.Root value={selectedMode} onValueChange={(mode) => { setSelectedMode(mode); onSetMode(mode) }}>
               <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
                 <Select.Value />
                 <Select.Icon className="text-text-dim">
