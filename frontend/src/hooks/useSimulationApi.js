@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { decode } from '@msgpack/msgpack'
 
 const BASE = '/api/simulation'
@@ -56,7 +56,7 @@ export function useSimulationApi() {
     return request('/speed', { method: 'POST', body: JSON.stringify({ multiplier }) })
   }, [])
 
-  return {
+  return useMemo(() => ({
     getStatus,
     getParams,
     updateParams,
@@ -70,5 +70,5 @@ export function useSimulationApi() {
     setManualVoltage,
     applyDisturbance,
     setSpeed,
-  }
+  }), [getStatus, getParams, updateParams, start, stop, pause, resume, reset, step, setControlMode, setManualVoltage, applyDisturbance, setSpeed])
 }

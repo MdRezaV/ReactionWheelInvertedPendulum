@@ -50,9 +50,11 @@ export default function PendulumCanvas({ latest, params }) {
         return
       }
 
-      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-        canvas.width = w * dpr
-        canvas.height = h * dpr
+      const pw = Math.round(w * dpr)
+      const ph = Math.round(h * dpr)
+      if (canvas.width !== pw || canvas.height !== ph) {
+        canvas.width = pw
+        canvas.height = ph
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       }
 

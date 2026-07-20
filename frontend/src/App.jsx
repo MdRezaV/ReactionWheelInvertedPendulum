@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback } from 'react'
 import { useSimulationApi } from './hooks/useSimulationApi'
 import { useSimulationSocket } from './hooks/useSimulationSocket'
 import { usePerformanceMetrics } from './hooks/usePerformanceMetrics'
@@ -11,21 +11,16 @@ import NumericReadout from './components/NumericReadout'
 import StatusBar from './components/StatusBar'
 import ErrorLog from './components/ErrorLog'
 
+const MemoControlPanel = memo(ControlPanel)
+const MemoEnergyChart = memo(EnergyChart)
+const MemoTorqueChart = memo(TorqueChart)
+const MemoSimulationChart = memo(SimulationChart)
+
 function App() {
   const api = useSimulationApi()
-  const { connected, latest, status: wsStatus, params: wsParams, send, getBuffer, clearBuffer, getMetricsRef } = useSimulationSocket()
+  const { connected, latest, status, params, send, getBuffer, clearBuffer, getMetricsRef } = useSimulationSocket()
   const socketMetricsRef = getMetricsRef()
   const { fps, bytesPerSec, msgsPerSec, errors, addError, clearErrors } = usePerformanceMetrics(socketMetricsRef)
-  const [status, setStatus] = useState(null)
-  const [params, setParams] = useState(null)
-
-  useEffect(() => {
-    if (wsParams) setParams(wsParams)
-  }, [wsParams])
-
-  useEffect(() => {
-    if (wsStatus) setStatus(wsStatus)
-  }, [wsStatus])
 
   const handleStart = useCallback(async () => { await api.start() }, [api])
   const handleStop = useCallback(async () => { await api.stop() }, [api])
@@ -62,7 +57,7 @@ function App() {
 
       <main className="flex flex-1 overflow-hidden">
         <aside className="w-[272px] border-l border-border overflow-y-auto flex-shrink-0 bg-surface/40">
-          <ControlPanel
+          <MemoControlPanel
             status={status}
             params={params}
             onStart={handleStart}
@@ -80,9 +75,9 @@ function App() {
         <div className="flex flex-1 overflow-hidden">
           <section className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
             <NumericReadout latest={latest} />
-            <EnergyChart getBuffer={getBuffer} />
-            <TorqueChart getBuffer={getBuffer} />
-            <SimulationChart getBuffer={getBuffer} />
+            <MemoEnergyChart getBuffer={getBuffer} />
+            <MemoTorqueChart getBuffer={getBuffer} />
+            <MemoSimulationChart getBuffer={getBuffer} />
           </section>
 
           <section className="flex-1 flex flex-col border-r border-border p-3 min-h-0">

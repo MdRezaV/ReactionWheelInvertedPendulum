@@ -70,7 +70,7 @@ export function useSimulationSocket() {
       if (lastValid) {
         const t = latestObjRef.current
         for (const k in lastValid) t[k] = lastValid[k]
-        setLatest(t)
+        setLatest({ ...t })
       }
       const excess = bufferRef.current.length - MAX_BUFFER_SIZE
       if (excess > 0) {

@@ -34,14 +34,22 @@ export default function NumericReadout({ latest }) {
   useEffect(() => {
     const animate = () => {
       if (hasDataRef.current) {
+        let needsWrite = false
         for (let i = 0; i < FIELDS.length; i++) {
           const f = FIELDS[i]
           const target = targetRef.current[f.key] ?? 0
           const current = displayRef.current[f.key] ?? 0
-          const next = current + (target - current) * LERP_FACTOR
-          displayRef.current[f.key] = Math.abs(next - target) < 1e-6 ? target : next
-          const el = spanRefs.current[i]
-          if (el) el.textContent = f.format(displayRef.current[f.key])
+          if (Math.abs(current - target) > 1e-6) {
+            needsWrite = true
+            const next = current + (target - current) * LERP_FACTOR
+            displayRef.current[f.key] = Math.abs(next - target) < 1e-6 ? target : next
+          }
+        }
+        if (needsWrite) {
+          for (let i = 0; i < FIELDS.length; i++) {
+            const el = spanRefs.current[i]
+            if (el) el.textContent = FIELDS[i].format(displayRef.current[FIELDS[i].key])
+          }
         }
       }
       rafRef.current = requestAnimationFrame(animate)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import * as Select from '@radix-ui/react-select'
 import * as Slider from '@radix-ui/react-slider'
@@ -66,11 +66,20 @@ export default function ControlPanel({
   const isRunning = status?.status === 'running'
   const isStopped = status?.status === 'stopped'
 
-  const handleParamChange = (scope, key, value) => {
+  const debounceRef = useRef(null)
+  const pendingRef = useRef({})
+
+  const handleParamChange = useCallback((scope, key, value) => {
     const numVal = parseFloat(value)
     if (Number.isNaN(numVal)) return
-    onUpdateParams({ [scope]: { [key]: numVal } })
-  }
+    if (!pendingRef.current[scope]) pendingRef.current[scope] = {}
+    pendingRef.current[scope][key] = numVal
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onUpdateParams(pendingRef.current)
+      pendingRef.current = {}
+    }, 100)
+  }, [onUpdateParams])
 
   const btn = 'px-2.5 py-1.5 text-[14px] font-medium rounded-md border transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.96]'
 

@@ -15,6 +15,7 @@ const MIN_FRAME_MS = 33
 export default function SimulationChart({ getBuffer }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
+  const lastBufferRef = useRef({ len: 0, lastTime: -1 })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -32,16 +33,27 @@ export default function SimulationChart({ getBuffer }) {
       const rect = canvas.getBoundingClientRect()
       const w = rect.width
       const h = CHART_HEIGHT
+      const pw = Math.round(w * dpr)
+      const ph = Math.round(h * dpr)
+      const needsResize = canvas.width !== pw || canvas.height !== ph
 
-      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-        canvas.width = w * dpr
-        canvas.height = h * dpr
-        ctx.scale(dpr, dpr)
+      if (needsResize) {
+        canvas.width = pw
+        canvas.height = ph
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       }
 
-      ctx.clearRect(0, 0, w, h)
-
       const buffer = getBuffer()
+      const lastPt = buffer.length > 0 ? buffer[buffer.length - 1] : null
+      const curTime = lastPt ? lastPt.time : -1
+      if (!needsResize && buffer.length === lastBufferRef.current.len && curTime === lastBufferRef.current.lastTime) {
+        animRef.current = requestAnimationFrame(draw)
+        return
+      }
+      lastBufferRef.current.len = buffer.length
+      lastBufferRef.current.lastTime = curTime
+
+      ctx.clearRect(0, 0, w, h)
       const plotW = w - PADDING.left - PADDING.right
       const plotH = h - PADDING.top - PADDING.bottom
 
