@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as Collapsible from '@radix-ui/react-collapsible'
 import { toPersianDigits } from '../utils/format'
 
 const MAX_VISIBLE = 50
@@ -12,8 +13,6 @@ export default function ErrorLog({ errors, onClear }) {
   const [collapsed, setCollapsed] = useState(true)
   const listRef = useRef(null)
 
-  const toggle = useCallback(() => { setCollapsed((c) => !c) }, [])
-
   useEffect(() => {
     if (!collapsed && listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight
@@ -23,8 +22,8 @@ export default function ErrorLog({ errors, onClear }) {
   const count = errors.length
 
   return (
-    <div className="border-t border-border flex-shrink-0 text-[13px] bg-surface/60 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-4 py-1 cursor-pointer select-none hover:bg-white/[0.02] transition-colors" onClick={toggle}>
+    <Collapsible.Root open={!collapsed} onOpenChange={(open) => setCollapsed(!open)} className="border-t border-border flex-shrink-0 text-[13px] bg-surface/60 backdrop-blur-sm">
+      <Collapsible.Trigger className="flex items-center justify-between w-full px-4 py-1 cursor-pointer select-none hover:bg-white/[0.02] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent">
         <span className="flex items-center gap-1.5 font-bold text-text-dim">
           خطاها
           {count > 0 && (
@@ -33,10 +32,9 @@ export default function ErrorLog({ errors, onClear }) {
             </span>
           )}
         </span>
-        <span className="text-text-dim text-[11px]">{collapsed ? '▲' : '▼'}</span>
-      </div>
-      {!collapsed && (
-        <div className="border-t border-border max-h-[120px] flex flex-col">
+        <span className="text-text-dim text-[11px] transition-transform duration-150 data-[state=open]:rotate-180">▲</span>
+      </Collapsible.Trigger>
+      <Collapsible.Content className="border-t border-border max-h-[120px] flex flex-col animate-[slide-down_150ms_ease-out]">
           {count === 0 ? (
             <div className="px-3 py-1.5 text-text-dim italic">بدون خطا</div>
           ) : (
@@ -59,8 +57,7 @@ export default function ErrorLog({ errors, onClear }) {
               </div>
             </>
           )}
-        </div>
-      )}
-    </div>
+      </Collapsible.Content>
+    </Collapsible.Root>
   )
 }

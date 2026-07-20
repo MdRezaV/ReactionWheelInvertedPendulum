@@ -12,6 +12,13 @@ export function toPersianDigits(str) {
 }
 
 /**
+ * Convert all Persian digits in a string to Western digits.
+ */
+export function toWesternDigits(str) {
+  return String(str).replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)))
+}
+
+/**
  * Format a number to a fixed number of decimal places (Persian digits).
  */
 export function fmt(value, decimals = 3) {

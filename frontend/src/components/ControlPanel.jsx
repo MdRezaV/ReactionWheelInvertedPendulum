@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { toPersianDigits } from '../utils/format'
+import * as Tabs from '@radix-ui/react-tabs'
+import * as Select from '@radix-ui/react-select'
+import * as Slider from '@radix-ui/react-slider'
+import { toPersianDigits, toWesternDigits } from '../utils/format'
 
 const CONTROL_MODES = [
   { value: 'none', label: 'بدون کنترل' },
@@ -73,23 +76,20 @@ export default function ControlPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex border-b border-border bg-surface/60">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-1 text-[13px] font-bold border-b-2 transition-all duration-150 cursor-pointer
-              ${activeTab === tab.id
-                ? 'text-accent border-accent bg-accent-dim/20'
-                : 'text-text-dim border-transparent hover:text-text'}`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <Tabs.List className="flex border-b border-border bg-surface/60">
+          {TABS.map((tab) => (
+            <Tabs.Trigger
+              key={tab.id}
+              value={tab.id}
+              className="flex-1 py-2 px-1 text-[13px] font-bold border-b-2 border-transparent text-text-dim transition-all duration-150 cursor-pointer hover:text-text data-[state=active]:text-accent data-[state=active]:border-accent data-[state=active]:bg-accent-dim/20 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              {tab.label}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
 
-      {activeTab === 'controls' && (
-        <div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1">
+        <Tabs.Content value="controls" className="p-3 flex flex-col gap-3 overflow-y-auto flex-1 focus:outline-none">
           <div className="grid grid-cols-3 gap-1.5">
             <button onClick={onStart} disabled={isRunning} className={`${btn} border-success/30 text-success bg-success/5`}>شروع</button>
             <button onClick={onStop} disabled={isStopped} className={`${btn} border-danger/30 text-danger bg-danger/5`}>توقف</button>
@@ -102,15 +102,32 @@ export default function ControlPanel({
 
           <div className="flex flex-col gap-1">
             <label className="text-[13px] text-text-dim font-bold">حالت کنترل</label>
-            <select
-              value={status?.control_mode || 'none'}
-              onChange={(e) => onSetMode(e.target.value)}
-              className="px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors"
-            >
-              {CONTROL_MODES.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+            <Select.Root value={status?.control_mode || 'none'} onValueChange={onSetMode}>
+              <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
+                <Select.Value />
+                <Select.Icon className="text-text-dim">
+                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content position="popper" sideOffset={4} className="bg-card border border-border-light rounded-md shadow-card overflow-hidden z-50 animate-[slide-down_150ms_ease-out]">
+                  <Select.Viewport className="p-1">
+                    {CONTROL_MODES.map((m) => (
+                      <Select.Item
+                        key={m.value}
+                        value={m.value}
+                        className="flex items-center px-2.5 py-1.5 text-[14px] rounded-sm text-text cursor-pointer outline-none data-[highlighted]:bg-accent-dim data-[highlighted]:text-accent data-[state=checked]:text-accent"
+                      >
+                        <Select.ItemText>{m.label}</Select.ItemText>
+                        <Select.ItemIndicator className="mr-auto pl-1">
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </Select.ItemIndicator>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
           </div>
 
           {status?.control_mode === 'manual' && (
@@ -118,10 +135,19 @@ export default function ControlPanel({
               <label className="text-[13px] text-text-dim font-bold">
                 ولتاژ دستی: <span className="text-accent font-mono">{toPersianDigits(manualTorque.toFixed(1))} ولت</span>
               </label>
-              <input
-                type="range" min={-12} max={12} step={0.1} value={manualTorque}
-                onChange={(e) => { const v = parseFloat(e.target.value); setManualTorque(v); onSetManualVoltage(v) }}
-              />
+              <Slider.Root
+                value={[manualTorque]}
+                min={-12}
+                max={12}
+                step={0.1}
+                onValueChange={([v]) => { setManualTorque(v); onSetManualVoltage(v) }}
+                className="relative flex items-center h-4 select-none touch-none"
+              >
+                <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                  <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                </Slider.Track>
+                <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+              </Slider.Root>
             </div>
           )}
 
@@ -129,10 +155,19 @@ export default function ControlPanel({
             <label className="text-[13px] text-text-dim font-bold">
               سرعت شبیه‌سازی: <span className="text-accent font-mono">{toPersianDigits(speed.toFixed(1))} برابر</span>
             </label>
-            <input
-              type="range" min={0.1} max={5} step={0.1} value={speed}
-              onChange={(e) => { const v = parseFloat(e.target.value); setSpeed(v); onSetSpeed(v) }}
-            />
+            <Slider.Root
+              value={[speed]}
+              min={0.1}
+              max={5}
+              step={0.1}
+              onValueChange={([v]) => { setSpeed(v); onSetSpeed(v) }}
+              className="relative flex items-center h-4 select-none touch-none"
+            >
+              <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                <Slider.Range className="absolute h-full rounded-full bg-accent" />
+              </Slider.Track>
+              <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+            </Slider.Root>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -144,11 +179,9 @@ export default function ControlPanel({
               <button onClick={() => onDisturbance(-12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>−۱۲ ولت</button>
             </div>
           </div>
-        </div>
-      )}
+        </Tabs.Content>
 
-      {activeTab === 'sim-params' && (
-        <div className="p-3 flex flex-col gap-2 overflow-y-auto flex-1">
+        <Tabs.Content value="sim-params" className="p-3 flex flex-col gap-2 overflow-y-auto flex-1 focus:outline-none">
           {SIM_PARAMS.map((p) => {
             const val = params?.simulation?.[p.key] ?? p.min
             return (
@@ -158,16 +191,26 @@ export default function ControlPanel({
                   <span className="text-[12px] text-text-dim/60">{p.unit}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="range" min={p.min} max={p.max} step={p.step} value={val}
-                    onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
-                    className="flex-1"
-                  />
+                  <Slider.Root
+                    value={[val]}
+                    min={p.min}
+                    max={p.max}
+                    step={p.step}
+                    onValueChange={([v]) => handleParamChange('simulation', p.key, String(v))}
+                    className="relative flex items-center h-4 flex-1 select-none touch-none"
+                  >
+                    <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                      <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+                    </Slider.Track>
+                    <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+                  </Slider.Root>
                   <div className="flex items-center gap-0.5">
                     <input
-                      type="number" min={p.min} max={p.max} step={p.step} value={val}
-                      onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
-                      className="w-[62px] px-1 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      type="text"
+                      inputMode="decimal"
+                      value={toPersianDigits(String(val))}
+                      onChange={(e) => handleParamChange('simulation', p.key, toWesternDigits(e.target.value))}
+                      className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
                       dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
@@ -185,27 +228,35 @@ export default function ControlPanel({
               </div>
             )
           })}
-        </div>
-      )}
+        </Tabs.Content>
 
-      {activeTab === 'ctrl-params' && (
-        <div className="p-3 flex flex-col gap-2 overflow-y-auto flex-1">
+        <Tabs.Content value="ctrl-params" className="p-3 flex flex-col gap-2 overflow-y-auto flex-1 focus:outline-none">
           {CTRL_PARAMS.map((p) => {
             const val = params?.control?.[p.key] ?? p.min
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
                 <label className="text-[13px] text-text-dim">{p.label}</label>
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="range" min={p.min} max={p.max} step={p.step} value={val}
-                    onChange={(e) => handleParamChange('control', p.key, e.target.value)}
-                    className="flex-1"
-                  />
+                  <Slider.Root
+                    value={[val]}
+                    min={p.min}
+                    max={p.max}
+                    step={p.step}
+                    onValueChange={([v]) => handleParamChange('control', p.key, String(v))}
+                    className="relative flex items-center h-4 flex-1 select-none touch-none"
+                  >
+                    <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                      <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+                    </Slider.Track>
+                    <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+                  </Slider.Root>
                   <div className="flex items-center gap-0.5">
                     <input
-                      type="number" min={p.min} max={p.max} step={p.step} value={val}
-                      onChange={(e) => handleParamChange('control', p.key, e.target.value)}
-                      className="w-[62px] px-1 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      type="text"
+                      inputMode="decimal"
+                      value={toPersianDigits(String(val))}
+                      onChange={(e) => handleParamChange('control', p.key, toWesternDigits(e.target.value))}
+                      className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
                       dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
@@ -223,8 +274,8 @@ export default function ControlPanel({
               </div>
             )
           })}
-        </div>
-      )}
+        </Tabs.Content>
+      </Tabs.Root>
     </div>
   )
 }
