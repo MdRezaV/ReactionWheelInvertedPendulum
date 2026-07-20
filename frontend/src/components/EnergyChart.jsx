@@ -96,7 +96,7 @@ export default function EnergyChart({ getBuffer }) {
       }
 
       ctx.fillStyle = '#555577'
-      ctx.font = '9px Vazirmatn, sans-serif'
+      ctx.font = '11px Vazirmatn, sans-serif'
       ctx.textAlign = 'right'
       ctx.fillText(toPersianDigits(yMax.toFixed(1)), PADDING.left - 3, PADDING.top + 8)
       ctx.fillText(toPersianDigits(yMin.toFixed(1)), PADDING.left - 3, PADDING.top + plotH)
@@ -111,10 +111,10 @@ export default function EnergyChart({ getBuffer }) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
-        <h3 className="text-[11px] font-bold text-text-dim">انرژی</h3>
+        <h3 className="text-[13px] font-bold text-text-dim">انرژی</h3>
         <div className="flex gap-2">
           {SERIES.map((s) => (
-            <span key={s.key} className="flex items-center gap-1 text-[10px] text-text-dim">
+            <span key={s.key} className="flex items-center gap-1 text-[12px] text-text-dim">
               <span className="w-2 h-[2px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>

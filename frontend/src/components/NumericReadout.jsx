@@ -56,14 +56,14 @@ export default function NumericReadout({ latest }) {
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
-      <div className="px-3 py-1.5 border-b border-border">
-        <h3 className="text-[11px] font-bold text-text-dim uppercase tracking-wide">مقادیر زنده</h3>
+      <div className="px-3 py-2 border-b border-border">
+        <h3 className="text-[13px] font-bold text-text-dim uppercase tracking-wide">مقادیر زنده</h3>
       </div>
       <div className="grid grid-cols-4 gap-px bg-border/50">
         {FIELDS.map((f) => (
-          <div key={f.key} className="flex flex-col px-2 py-1.5 bg-card">
-            <span className="text-[9px] text-text-dim font-bold">{f.label}</span>
-            <span className="text-[11px] font-mono text-text-h mt-0.5" dir="ltr">
+          <div key={f.key} className="flex flex-col px-2 py-2 bg-card">
+            <span className="text-[11px] text-text-dim font-bold">{f.label}</span>
+            <span className="text-[13px] font-mono text-text-h mt-0.5" dir="ltr">
               {latest ? f.format(values[f.key] ?? 0) : '—'}
             </span>
           </div>

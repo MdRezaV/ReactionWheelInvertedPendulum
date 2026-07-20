@@ -29,8 +29,8 @@ export default function StatusBar({ status, connected, warnings, fps, bytesPerSe
   const statusColor = STATUS_COLORS[status?.status] || 'text-text-dim'
 
   return (
-    <header className="flex items-center gap-4 px-4 py-1.5 border-b border-border flex-shrink-0 bg-surface/70 backdrop-blur-md text-[12px]">
-      <h1 className="text-[13px] font-bold text-text-h tracking-tight whitespace-nowrap">
+    <header className="flex items-center gap-4 px-4 py-2 border-b border-border flex-shrink-0 bg-surface/70 backdrop-blur-md text-[14px]">
+      <h1 className="text-[15px] font-bold text-text-h tracking-tight whitespace-nowrap">
         پاندول معکوس چرخ عکس‌العملی
       </h1>
 
@@ -55,7 +55,7 @@ export default function StatusBar({ status, connected, warnings, fps, bytesPerSe
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-3 text-text-dim text-[11px]">
+      <div className="flex items-center gap-3 text-text-dim text-[13px]">
         <span>{toPersianDigits(fps)} فریم</span>
         <span>{fmtBytes(bytesPerSec)}/ثانیه</span>
         <span>{toPersianDigits(msgsPerSec)} پیام/ثانیه</span>
@@ -63,7 +63,7 @@ export default function StatusBar({ status, connected, warnings, fps, bytesPerSe
       </div>
 
       {warnings && warnings.length > 0 && (
-        <span className="text-warning text-[11px]">هشدار: {warnings[0]}</span>
+        <span className="text-warning text-[13px]">هشدار: {warnings[0]}</span>
       )}
     </header>
   )

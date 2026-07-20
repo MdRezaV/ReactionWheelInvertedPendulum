@@ -37,7 +37,7 @@
 }
 
 html, body {
-  @apply m-0 p-0 bg-bg text-text text-[13px] leading-relaxed antialiased;
+  @apply m-0 p-0 bg-bg text-text text-[15px] leading-relaxed antialiased;
 }
 
 #root {

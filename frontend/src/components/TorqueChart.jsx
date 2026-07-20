@@ -94,7 +94,7 @@ export default function TorqueChart({ getBuffer }) {
       }
 
       ctx.fillStyle = '#555577'
-      ctx.font = '9px Vazirmatn, sans-serif'
+      ctx.font = '11px Vazirmatn, sans-serif'
       ctx.textAlign = 'center'
       ctx.fillText(`${toPersianDigits(tStart.toFixed(1))}s`, PADDING.left, h - 3)
       ctx.fillText(`${toPersianDigits(tEnd.toFixed(1))}s`, PADDING.left + plotW, h - 3)
@@ -109,10 +109,10 @@ export default function TorqueChart({ getBuffer }) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
-        <h3 className="text-[11px] font-bold text-text-dim">الکتریکی و چرخ</h3>
+        <h3 className="text-[13px] font-bold text-text-dim">الکتریکی و چرخ</h3>
         <div className="flex gap-2">
           {SERIES.map((s) => (
-            <span key={s.key} className="flex items-center gap-1 text-[10px] text-text-dim">
+            <span key={s.key} className="flex items-center gap-1 text-[12px] text-text-dim">
               <span className="w-2 h-[2px] rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>

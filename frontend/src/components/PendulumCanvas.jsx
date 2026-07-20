@@ -238,7 +238,7 @@ export default function PendulumCanvas({ latest, params }) {
       }
 
       ctx.fillStyle = '#8888aa'
-      ctx.font = '10px Vazirmatn, sans-serif'
+      ctx.font = '12px Vazirmatn, sans-serif'
       ctx.textAlign = 'right'
       ctx.fillText(`زاویه: ${toPersianDigits((theta * 180 / Math.PI).toFixed(1))}°`, w - 6, 14)
       ctx.fillText(`سرعت چرخ: ${toPersianDigits((phi_dot * 180 / Math.PI).toFixed(0))}°/s`, w - 6, 27)
@@ -253,8 +253,8 @@ export default function PendulumCanvas({ latest, params }) {
 
   return (
     <div className="flex-1 flex flex-col rounded-lg border border-border bg-card overflow-hidden shadow-card hover:border-border-light transition-colors duration-200 min-h-0">
-      <div className="px-3 py-1.5 border-b border-border flex-shrink-0">
-        <h3 className="text-[11px] font-bold text-text-dim">پاندول</h3>
+      <div className="px-3 py-2 border-b border-border flex-shrink-0">
+        <h3 className="text-[13px] font-bold text-text-dim">پاندول</h3>
       </div>
       <div className="flex-1 min-h-0">
         <canvas ref={canvasRef} className="w-full h-full block" />

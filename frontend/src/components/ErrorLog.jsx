@@ -23,7 +23,7 @@ export default function ErrorLog({ errors, onClear }) {
   const count = errors.length
 
   return (
-    <div className="border-t border-border flex-shrink-0 text-[11px] bg-surface/60 backdrop-blur-sm">
+    <div className="border-t border-border flex-shrink-0 text-[13px] bg-surface/60 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-1 cursor-pointer select-none hover:bg-white/[0.02] transition-colors" onClick={toggle}>
         <span className="flex items-center gap-1.5 font-bold text-text-dim">
           خطاها
@@ -33,7 +33,7 @@ export default function ErrorLog({ errors, onClear }) {
             </span>
           )}
         </span>
-        <span className="text-text-dim text-[9px]">{collapsed ? '▲' : '▼'}</span>
+        <span className="text-text-dim text-[11px]">{collapsed ? '▲' : '▼'}</span>
       </div>
       {!collapsed && (
         <div className="border-t border-border max-h-[120px] flex flex-col">
@@ -44,14 +44,14 @@ export default function ErrorLog({ errors, onClear }) {
               <div className="flex justify-end px-2 py-0.5">
                 <button
                   onClick={onClear}
-                  className="px-2 py-0.5 text-[10px] rounded border border-border bg-card text-text-dim cursor-pointer hover:text-text-h hover:border-accent-border transition-colors"
+                  className="px-2 py-0.5 text-[12px] rounded border border-border bg-card text-text-dim cursor-pointer hover:text-text-h hover:border-accent-border transition-colors"
                 >
                   پاک کردن
                 </button>
               </div>
               <div className="overflow-y-auto px-2 pb-1.5 flex-1" ref={listRef}>
                 {errors.slice(-MAX_VISIBLE).map((err, i) => (
-                  <div key={err.time + '-' + i} className="flex gap-2 py-px font-mono text-[10px] leading-relaxed">
+                  <div key={err.time + '-' + i} className="flex gap-2 py-px font-mono text-[12px] leading-relaxed">
                     <span className="text-text-dim flex-shrink-0" dir="ltr">{formatTimestamp(err.time)}</span>
                     <span className="text-red-300 break-words">{err.message}</span>
                   </div>

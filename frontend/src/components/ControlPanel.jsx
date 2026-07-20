@@ -69,7 +69,7 @@ export default function ControlPanel({
     onUpdateParams({ [scope]: { [key]: numVal } })
   }
 
-  const btn = 'px-2.5 py-1.5 text-[12px] font-medium rounded-md border transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.96]'
+  const btn = 'px-2.5 py-1.5 text-[14px] font-medium rounded-md border transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.96]'
 
   return (
     <div className="flex flex-col h-full">
@@ -78,7 +78,7 @@ export default function ControlPanel({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-1 text-[11px] font-bold border-b-2 transition-all duration-150 cursor-pointer
+            className={`flex-1 py-2 px-1 text-[13px] font-bold border-b-2 transition-all duration-150 cursor-pointer
               ${activeTab === tab.id
                 ? 'text-accent border-accent bg-accent-dim/20'
                 : 'text-text-dim border-transparent hover:text-text'}`}
@@ -101,11 +101,11 @@ export default function ControlPanel({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-dim font-bold">حالت کنترل</label>
+            <label className="text-[13px] text-text-dim font-bold">حالت کنترل</label>
             <select
               value={status?.control_mode || 'none'}
               onChange={(e) => onSetMode(e.target.value)}
-              className="px-2.5 py-1.5 text-[12px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors"
+              className="px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors"
             >
               {CONTROL_MODES.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -115,7 +115,7 @@ export default function ControlPanel({
 
           {status?.control_mode === 'manual' && (
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] text-text-dim font-bold">
+              <label className="text-[13px] text-text-dim font-bold">
                 ولتاژ دستی: <span className="text-accent font-mono">{toPersianDigits(manualTorque.toFixed(1))} ولت</span>
               </label>
               <input
@@ -126,7 +126,7 @@ export default function ControlPanel({
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-dim font-bold">
+            <label className="text-[13px] text-text-dim font-bold">
               سرعت شبیه‌سازی: <span className="text-accent font-mono">{toPersianDigits(speed.toFixed(1))} برابر</span>
             </label>
             <input
@@ -136,12 +136,12 @@ export default function ControlPanel({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-dim font-bold">اغتشاش</label>
+            <label className="text-[13px] text-text-dim font-bold">اغتشاش</label>
             <div className="grid grid-cols-4 gap-1">
-              <button onClick={() => onDisturbance(6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[11px]`}>+۶ ولت</button>
-              <button onClick={() => onDisturbance(-6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[11px]`}>−۶ ولت</button>
-              <button onClick={() => onDisturbance(12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[11px]`}>+۱۲ ولت</button>
-              <button onClick={() => onDisturbance(-12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[11px]`}>−۱۲ ولت</button>
+              <button onClick={() => onDisturbance(6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>+۶ ولت</button>
+              <button onClick={() => onDisturbance(-6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>−۶ ولت</button>
+              <button onClick={() => onDisturbance(12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>+۱۲ ولت</button>
+              <button onClick={() => onDisturbance(-12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>−۱۲ ولت</button>
             </div>
           </div>
         </div>
@@ -154,8 +154,8 @@ export default function ControlPanel({
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] text-text-dim">{p.label}</label>
-                  <span className="text-[10px] text-text-dim/60">{p.unit}</span>
+                  <label className="text-[13px] text-text-dim">{p.label}</label>
+                  <span className="text-[12px] text-text-dim/60">{p.unit}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <input
@@ -167,7 +167,7 @@ export default function ControlPanel({
                     <input
                       type="number" min={p.min} max={p.max} step={p.step} value={val}
                       onChange={(e) => handleParamChange('simulation', p.key, e.target.value)}
-                      className="w-[56px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      className="w-[62px] px-1 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
                       dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
@@ -194,7 +194,7 @@ export default function ControlPanel({
             const val = params?.control?.[p.key] ?? p.min
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
-                <label className="text-[11px] text-text-dim">{p.label}</label>
+                <label className="text-[13px] text-text-dim">{p.label}</label>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="range" min={p.min} max={p.max} step={p.step} value={val}
@@ -205,7 +205,7 @@ export default function ControlPanel({
                     <input
                       type="number" min={p.min} max={p.max} step={p.step} value={val}
                       onChange={(e) => handleParamChange('control', p.key, e.target.value)}
-                      className="w-[56px] px-1 py-0.5 text-[11px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
+                      className="w-[62px] px-1 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-left focus:border-accent focus:outline-none"
                       dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
