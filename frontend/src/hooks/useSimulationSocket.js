@@ -18,6 +18,7 @@ export function useSimulationSocket() {
   const [connected, setConnected] = useState(false)
   const [latest, setLatest] = useState(null)
   const [status, setStatus] = useState(null)
+  const [params, setParams] = useState(null)
   const bufferRef = useRef([])
   const lastFullRef = useRef(null)
   const wsRef = useRef(null)
@@ -76,6 +77,9 @@ export function useSimulationSocket() {
         warnings: msg.warnings || [],
         speed_multiplier: msg.speed_multiplier ?? 1.0,
       })
+    } else if (msg.t === 3) {
+      const { t, ...rest } = msg
+      setParams(rest)
     }
   }, [applyDelta, sampleToObject])
 
@@ -139,5 +143,5 @@ export function useSimulationSocket() {
     }
   }, [connect])
 
-  return { connected, latest, status, send, getBuffer, clearBuffer }
+  return { connected, latest, status, params, send, getBuffer, clearBuffer }
 }

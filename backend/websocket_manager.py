@@ -506,6 +506,28 @@ class WebSocketManager:
         for ws in stale:
             self.disconnect(ws)
 
+    async def broadcast_params(self, params_dict: dict) -> None:
+        """Push current simulation/control parameters to all connected clients.
+
+        Parameters
+        ----------
+        params_dict : dict
+            Serialized parameters (from ParamsResponse.model_dump()).
+        """
+        if not self._active_connections:
+            return
+
+        payload = msgpack.packb({"t": 3, **params_dict}, use_bin_type=True)
+        stale: list[WebSocket] = []
+        for ws in self._active_connections:
+            try:
+                await ws.send_bytes(payload)
+            except Exception:
+                stale.append(ws)
+
+        for ws in stale:
+            self.disconnect(ws)
+
     def should_broadcast(self) -> bool:
         """Advance the throttle counter and indicate whether to sample.
 

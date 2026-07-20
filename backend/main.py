@@ -151,7 +151,9 @@ async def update_params(request: ParamsUpdateRequest) -> ParamsResponse:
         )
         _sim_manager.update_ctrl_params(merged)
 
-    return _sim_manager.get_params()
+    result = _sim_manager.get_params()
+    await _ws_manager.broadcast_params(result.model_dump())
+    return result
 
 
 @app.post("/api/simulation/start", response_model=StatusResponse)
@@ -259,6 +261,14 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
             )
             await websocket.send_bytes(status_payload)
 
+        # Send current parameters so the client has them without polling.
+        params_resp = _sim_manager.get_params()
+        params_payload = msgpack.packb(
+            {"t": 3, **params_resp.model_dump()},
+            use_bin_type=True,
+        )
+        await websocket.send_bytes(params_payload)
+
         # Command receive loop. Telemetry streaming is handled by the
         # SimulationManager background loop broadcasting to all clients.
         while True:
@@ -272,6 +282,16 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
             elif isinstance(result, ParsedCommand):
                 try:
                     await _sim_manager.handle_ws_command(result.command)
+                    cmd_type = result.command.type
+                    if cmd_type in (
+                        "set_param",
+                        "set_simulation_params",
+                        "set_control_params",
+                        "set_control_mode",
+                        "set_speed",
+                    ):
+                        params_resp = _sim_manager.get_params()
+                        await _ws_manager.broadcast_params(params_resp.model_dump())
                 except (ValueError, KeyError) as exc:
                     await websocket.send_bytes(
                         msgpack.packb({"t": 2, "error": str(exc)}, use_bin_type=True)

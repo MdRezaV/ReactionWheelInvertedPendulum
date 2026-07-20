@@ -13,22 +13,15 @@ import './App.css'
 
 function App() {
   const api = useSimulationApi()
-  const { connected, latest, status: wsStatus, send, getBuffer, clearBuffer } = useSimulationSocket()
+  const { connected, latest, status: wsStatus, params: wsParams, send, getBuffer, clearBuffer } = useSimulationSocket()
   const [status, setStatus] = useState(null)
   const [params, setParams] = useState(null)
 
-  const refreshParams = useCallback(async () => {
-    try {
-      const p = await api.getParams()
-      setParams(p)
-    } catch {
-      // Ignore
-    }
-  }, [api])
-
   useEffect(() => {
-    refreshParams()
-  }, [refreshParams])
+    if (wsParams) {
+      setParams(wsParams)
+    }
+  }, [wsParams])
 
   useEffect(() => {
     if (wsStatus) {
@@ -71,8 +64,7 @@ function App() {
 
   const handleUpdateParams = useCallback(async (body) => {
     try {
-      const p = await api.updateParams(body)
-      setParams(p)
+      await api.updateParams(body)
     } catch {
       // Ignore validation errors silently
     }
