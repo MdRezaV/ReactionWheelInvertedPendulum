@@ -128,18 +128,7 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.fillStyle = 'rgba(242, 201, 76, 0.05)'
       ctx.fill()
 
-      ctx.beginPath()
-      ctx.moveTo(cx, cy)
-      ctx.arc(cx, cy, zoneRadius, up + cautionHalf, up + Math.PI)
-      ctx.closePath()
-      ctx.fillStyle = 'rgba(235, 87, 87, 0.06)'
-      ctx.fill()
-      ctx.beginPath()
-      ctx.moveTo(cx, cy)
-      ctx.arc(cx, cy, zoneRadius, up - Math.PI, up - cautionHalf)
-      ctx.closePath()
-      ctx.fillStyle = 'rgba(235, 87, 87, 0.06)'
-      ctx.fill()
+
 
       // Ground shadow
       const shadowScale = Math.abs(Math.sin(theta))
