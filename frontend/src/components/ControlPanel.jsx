@@ -49,6 +49,11 @@ const CTRL_PARAMS = [
   { key: 'smc_boundary', label: 'مرز پیوستگی SMC', min: 0.01, max: 0.5, step: 0.01 },
 ]
 
+function roundToStep(value, step) {
+  const decimals = (String(step).split('.')[1] || '').length
+  return parseFloat(value.toFixed(decimals))
+}
+
 const TABS = [
   { id: 'controls', label: 'کنترل' },
   { id: 'sim-params', label: 'فیزیک' },
@@ -240,11 +245,11 @@ export default function ControlPanel({
                     />
                     <div className="flex flex-col gap-px">
                       <button
-                        onClick={() => handleParamChange('simulation', p.key, String(Math.min(val + p.step, p.max)))}
+                        onClick={() => handleParamChange('simulation', p.key, String(Math.min(roundToStep(val + p.step, p.step), p.max)))}
                         className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-t cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
                       >▲</button>
                       <button
-                        onClick={() => handleParamChange('simulation', p.key, String(Math.max(val - p.step, p.min)))}
+                        onClick={() => handleParamChange('simulation', p.key, String(Math.max(roundToStep(val - p.step, p.step), p.min)))}
                         className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-b cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
                       >▼</button>
                     </div>
@@ -287,11 +292,11 @@ export default function ControlPanel({
                     />
                     <div className="flex flex-col gap-px">
                       <button
-                        onClick={() => handleParamChange('control', p.key, String(Math.min(val + p.step, p.max)))}
+                        onClick={() => handleParamChange('control', p.key, String(Math.min(roundToStep(val + p.step, p.step), p.max)))}
                         className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-t cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
                       >▲</button>
                       <button
-                        onClick={() => handleParamChange('control', p.key, String(Math.max(val - p.step, p.min)))}
+                        onClick={() => handleParamChange('control', p.key, String(Math.max(roundToStep(val - p.step, p.step), p.min)))}
                         className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-b cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
                       >▼</button>
                     </div>
