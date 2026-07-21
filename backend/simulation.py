@@ -21,6 +21,8 @@ import numpy as np
 
 from models import ControlMode, SimulationParameters, TelemetryMessage
 
+_DEAD_ZONE: float = 1e-8
+
 
 def _wrap_angle(angle: float) -> float:
     """Wrap an angle into the range (-pi, pi]."""
@@ -149,6 +151,7 @@ class Simulation:
             [p.initial_theta, p.initial_theta_dot, p.initial_phi, p.initial_phi_dot, p.initial_current],
             dtype=np.float64,
         )
+        self._state[np.abs(self._state) < _DEAD_ZONE] = 0.0
         self._time = 0.0
         self._last_voltage = 0.0
         self._last_current = 0.0
@@ -392,9 +395,8 @@ class Simulation:
             Armature voltage command (will be saturated to max_voltage).
         """
         dt = self._params.time_step
-        self._last_voltage = float(
-            np.clip(voltage, -self._params.max_voltage, self._params.max_voltage)
-        )
+        v_clipped = float(np.clip(voltage, -self._params.max_voltage, self._params.max_voltage))
+        self._last_voltage = v_clipped if abs(v_clipped) >= _DEAD_ZONE else 0.0
 
         s = self._state
         k1, k2, k3, k4, tmp = self._k1, self._k2, self._k3, self._k4, self._tmp
@@ -433,9 +435,12 @@ class Simulation:
         s[3] += coeff * (k1[3] + 2.0 * k2[3] + 2.0 * k3[3] + k4[3])
         s[4] += coeff * (k1[4] + 2.0 * k2[4] + 2.0 * k3[4] + k4[4])
 
+        # Snap near-zero state values to exact zero (dead-zone)
+        s[np.abs(s) < _DEAD_ZONE] = 0.0
+
         # Store quantities from the final RK4 evaluation for telemetry
-        self._last_theta_ddot = float(k4[1])
-        self._last_phi_ddot = float(k4[3])
+        self._last_theta_ddot = float(k4[1]) if abs(k4[1]) >= _DEAD_ZONE else 0.0
+        self._last_phi_ddot = float(k4[3]) if abs(k4[3]) >= _DEAD_ZONE else 0.0
         self._last_current = float(s[4])
 
         # Cache energy for this step (avoids recomputation in controller + telemetry)
@@ -445,7 +450,8 @@ class Simulation:
             + self._M22 * s[3] ** 2
         )
         pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
-        self._last_energy = float(ke + pe)
+        total_e = float(ke + pe)
+        self._last_energy = total_e if abs(total_e) >= _DEAD_ZONE else 0.0
 
         # Normalize angles
         s[0] = _wrap_angle(s[0])

@@ -10,7 +10,7 @@ export default function PendulumCanvas({ latest, params }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const TRAIL_LEN = 28
-  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
+  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, smoothSpeedNorm: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
   const dimsRef = useRef({ armLength: 70, wheelRadius: 12 })
 
   useEffect(() => {
@@ -102,6 +102,45 @@ export default function PendulumCanvas({ latest, params }) {
         ctx.stroke()
       }
 
+      // Equilibrium / danger zone wedges
+      const zoneRadius = armLength + 8
+      const safeHalf = 5 * Math.PI / 180
+      const cautionHalf = 30 * Math.PI / 180
+      const up = -Math.PI / 2
+
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, zoneRadius, up - safeHalf, up + safeHalf)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(111, 207, 151, 0.07)'
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, zoneRadius, up + safeHalf, up + cautionHalf)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(242, 201, 76, 0.05)'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, zoneRadius, up - cautionHalf, up - safeHalf)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(242, 201, 76, 0.05)'
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, zoneRadius, up + cautionHalf, up + Math.PI)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(235, 87, 87, 0.06)'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, zoneRadius, up - Math.PI, up - cautionHalf)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(235, 87, 87, 0.06)'
+      ctx.fill()
+
       // Ground shadow
       const shadowScale = Math.abs(Math.sin(theta))
       ctx.fillStyle = `rgba(0, 0, 0, ${0.25 - shadowScale * 0.15})`
@@ -181,22 +220,24 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.fill()
       ctx.restore()
 
-      // Speed arc around wheel — color shifts cyan → orange → red with speed
+      // Speed arc around wheel — smooth color transition cyan → orange → red
       const maxSpeed = 30
-      const wheelSpeedNorm = Math.min(Math.abs(phi_dot) / maxSpeed, 1)
-      if (wheelSpeedNorm > 0.01) {
+      const targetSpeedNorm = Math.min(Math.abs(phi_dot) / maxSpeed, 1)
+      st.smoothSpeedNorm += (targetSpeedNorm - st.smoothSpeedNorm) * Math.min(dt * 6, 1)
+      const sn = st.smoothSpeedNorm
+      if (sn > 0.01) {
         const arcRadius = wheelRadius + 5
-        const sweepAngle = wheelSpeedNorm * Math.PI * 1.8
+        const sweepAngle = sn * Math.PI * 1.8
         const startA = -Math.PI / 2 - sweepAngle / 2
         const endA = -Math.PI / 2 + sweepAngle / 2
         let arcR, arcG, arcB
-        if (wheelSpeedNorm < 0.5) {
-          const t = wheelSpeedNorm / 0.5
+        if (sn < 0.5) {
+          const t = sn / 0.5
           arcR = Math.round(86 + t * (242 - 86))
           arcG = Math.round(204 + t * (153 - 204))
           arcB = Math.round(242 + t * (74 - 242))
         } else {
-          const t = (wheelSpeedNorm - 0.5) / 0.5
+          const t = (sn - 0.5) / 0.5
           arcR = Math.round(242 + t * (235 - 242))
           arcG = Math.round(153 + t * (87 - 153))
           arcB = Math.round(74 + t * (87 - 74))
