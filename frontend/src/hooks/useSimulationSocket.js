@@ -86,6 +86,7 @@ export function useSimulationSocket() {
         client_count: msg.client_count,
         warnings: msg.warnings || [],
         speed_multiplier: msg.speed_multiplier ?? 1.0,
+        active_disturbances: msg.active_disturbances || [],
       })
     } else if (msg.t === 3) {
       const { t, ...rest } = msg

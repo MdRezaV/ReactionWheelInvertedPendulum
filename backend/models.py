@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from enum import Enum
 from typing import Literal, Optional
 
@@ -175,6 +176,7 @@ class StatusResponse(BaseModel):
     client_count: int = 0
     warnings: list[str] = Field(default_factory=list)
     speed_multiplier: float = 1.0
+    active_disturbances: list[DisturbanceConfig] = Field(default_factory=list)
 
 
 class ParamsResponse(BaseModel):
@@ -251,6 +253,7 @@ class StatusEvent(BaseModel):
     client_count: int = 0
     warnings: list[str] = Field(default_factory=list)
     speed_multiplier: float = 1.0
+    active_disturbances: list[DisturbanceConfig] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -275,13 +278,38 @@ class StepRequest(BaseModel):
     steps: int = Field(default=1, ge=1, description="Number of physics steps to advance")
 
 
-class DisturbanceRequest(BaseModel):
-    voltage: float = Field(description="Disturbance voltage magnitude [V]")
-    duration_steps: int = Field(default=10, ge=1, le=1000, description="Duration in physics steps")
-
-
 class SpeedRequest(BaseModel):
     multiplier: float = Field(default=1.0, ge=0.1, le=10.0, description="Simulation speed multiplier")
+
+
+# ---------------------------------------------------------------------------
+# Disturbance Schemas
+# ---------------------------------------------------------------------------
+
+
+class DisturbanceChannel(str, Enum):
+    voltage = "voltage"
+    torque = "torque"
+
+
+class DisturbanceWaveform(str, Enum):
+    constant = "constant"
+    sinusoidal = "sinusoidal"
+    pulse = "pulse"
+    sawtooth = "sawtooth"
+    gaussian_noise = "gaussian_noise"
+
+
+class DisturbanceConfig(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    channel: DisturbanceChannel
+    waveform: DisturbanceWaveform
+    amplitude: float = Field(default=1.0)
+    frequency: float = Field(default=1.0, ge=0)
+    duty_cycle: float = Field(default=0.5, ge=0, le=1.0)
+    mean: float = Field(default=0.0)
+    std: float = Field(default=0.1, ge=0)
+    duration_steps: int = Field(default=0, ge=0, description="0 for continuous")
 
 
 # ---------------------------------------------------------------------------
@@ -345,15 +373,19 @@ class WSSetManualVoltageCommand(WSCommandBase):
     voltage: float
 
 
-class WSDisturbanceCommand(WSCommandBase):
-    type: Literal["apply_disturbance"] = "apply_disturbance"
-    voltage: float
-    duration_steps: int = Field(default=10, ge=1, le=1000)
-
-
 class WSSetSpeedCommand(WSCommandBase):
     type: Literal["set_speed"] = "set_speed"
     multiplier: float = Field(default=1.0, ge=0.1, le=10.0)
+
+
+class WSSetDisturbanceCommand(WSCommandBase):
+    type: Literal["set_disturbance"] = "set_disturbance"
+    config: DisturbanceConfig
+
+
+class WSClearDisturbanceCommand(WSCommandBase):
+    type: Literal["clear_disturbance"] = "clear_disturbance"
+    id: Optional[str] = None
 
 
 class WSAutoTunerStartCommand(WSCommandBase):
@@ -379,8 +411,9 @@ WSCommand = (
     | WSSetControlParamsCommand
     | WSSetControlModeCommand
     | WSSetManualVoltageCommand
-    | WSDisturbanceCommand
     | WSSetSpeedCommand
+    | WSSetDisturbanceCommand
+    | WSClearDisturbanceCommand
     | WSAutoTunerStartCommand
     | WSAutoTunerStopCommand
 )

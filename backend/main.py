@@ -44,7 +44,7 @@ class MsgpackResponse(Response):
 from models import (
     ControlModeRequest,
     ControlParameters,
-    DisturbanceRequest,
+    DisturbanceConfig,
     ManualVoltageRequest,
     ParamsResponse,
     ParamsUpdateRequest,
@@ -204,8 +204,13 @@ async def set_manual_voltage(request: ManualVoltageRequest) -> dict:
 
 
 @app.post("/api/simulation/disturbance", response_model=StatusResponse)
-async def apply_disturbance(request: DisturbanceRequest) -> StatusResponse:
-    _sim_manager.apply_disturbance(request.voltage, request.duration_steps)
+async def apply_disturbance(config: DisturbanceConfig) -> StatusResponse:
+    await _sim_manager.apply_disturbance(config)
+    return await get_status()
+
+@app.post("/api/simulation/clear-disturbance", response_model=StatusResponse)
+async def clear_disturbance(id: Optional[str] = None) -> StatusResponse:
+    await _sim_manager.clear_disturbance(id)
     return await get_status()
 
 
@@ -289,6 +294,8 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
                         "set_control_params",
                         "set_control_mode",
                         "set_speed",
+                        "set_disturbance",
+                        "clear_disturbance",
                     ):
                         params_resp = _sim_manager.get_params()
                         await _ws_manager.broadcast_params(params_resp.model_dump())

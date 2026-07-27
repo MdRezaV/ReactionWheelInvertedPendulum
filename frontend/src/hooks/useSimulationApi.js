@@ -45,11 +45,16 @@ export function useSimulationApi() {
     return request('/manual-voltage', { method: 'POST', body: JSON.stringify({ voltage }) })
   }, [])
 
-  const applyDisturbance = useCallback((voltage, durationSteps = 10) => {
+  const applyDisturbance = useCallback((config) => {
     return request('/disturbance', {
       method: 'POST',
-      body: JSON.stringify({ voltage, duration_steps: durationSteps }),
+      body: JSON.stringify(config),
     })
+  }, [])
+
+  const clearDisturbance = useCallback((id = null) => {
+    const url = id ? `/clear-disturbance?id=${id}` : '/clear-disturbance'
+    return request(url, { method: 'POST' })
   }, [])
 
   const setSpeed = useCallback((multiplier) => {
@@ -69,6 +74,7 @@ export function useSimulationApi() {
     setControlMode,
     setManualVoltage,
     applyDisturbance,
+    clearDisturbance,
     setSpeed,
-  }), [getStatus, getParams, updateParams, start, stop, pause, resume, reset, step, setControlMode, setManualVoltage, applyDisturbance, setSpeed])
+  }), [getStatus, getParams, updateParams, start, stop, pause, resume, reset, step, setControlMode, setManualVoltage, applyDisturbance, clearDisturbance, setSpeed])
 }

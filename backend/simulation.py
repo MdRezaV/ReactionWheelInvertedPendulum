@@ -303,7 +303,7 @@ class Simulation:
         _theta, theta_dot, _phi, phi_dot, _i_a = self._state
         return float(self._M11 * theta_dot + self._M12 * phi_dot)
 
-    def compute_dynamics(self, state: np.ndarray, voltage: float) -> np.ndarray:
+    def compute_dynamics(self, state: np.ndarray, voltage: float, external_torque: float = 0.0) -> np.ndarray:
         """Compute the state derivative for a given state and applied voltage.
 
         Parameters
@@ -312,6 +312,8 @@ class Simulation:
             State vector [theta, theta_dot, phi, phi_dot, i_a].
         voltage : float
             Armature voltage applied to the motor (saturated internally).
+        external_torque : float
+            External torque applied to the pendulum body [N·m].
 
         Returns
         -------
@@ -330,11 +332,12 @@ class Simulation:
         torque_wheel = self._N * self._Kt * i_a
 
         # Right-hand side of M @ [theta_ddot, phi_ddot]^T = f
-        # Pendulum equation: gravity - reaction torque - pivot damping
+        # Pendulum equation: gravity - reaction torque - pivot damping + external
         f1 = (
             self._gravity_coeff * np.sin(theta)
             - torque_wheel
             - self._params.damping * theta_dot
+            + external_torque
         )
         # Wheel equation: motor torque - effective wheel damping
         f2 = torque_wheel - self._b_w_eff * phi_dot
@@ -350,7 +353,7 @@ class Simulation:
 
         return np.array([theta_dot, theta_ddot, phi_dot, phi_ddot, di_a_dt], dtype=np.float64)
 
-    def _compute_dynamics_into(self, state: np.ndarray, voltage: float, out: np.ndarray) -> None:
+    def _compute_dynamics_into(self, state: np.ndarray, voltage: float, out: np.ndarray, external_torque: float = 0.0) -> None:
         """Compute state derivative into a pre-allocated output array (zero-alloc hot path).
 
         Parameters
@@ -361,6 +364,8 @@ class Simulation:
             Armature voltage applied to the motor (saturated internally).
         out : np.ndarray
             Pre-allocated output array to write derivatives into.
+        external_torque : float
+            External torque applied to the pendulum body [N·m].
         """
         theta = state[0]
         theta_dot = state[1]
@@ -374,6 +379,7 @@ class Simulation:
             self._gravity_coeff * np.sin(theta)
             - torque_wheel
             - self._params.damping * theta_dot
+            + external_torque
         )
         f2 = torque_wheel - self._b_w_eff * phi_dot
 
@@ -384,7 +390,7 @@ class Simulation:
         out[3] = (self._M11 * f2 - self._M12 * f1) / det
         out[4] = (v - self._R * i_a - self._Ke * self._N * phi_dot) / self._L
 
-    def step(self, voltage: float) -> None:
+    def step(self, voltage: float, external_torque: float = 0.0) -> None:
         """Advance the simulation by one fixed time step using RK4.
 
         Uses pre-allocated buffers to avoid per-step array allocations.
@@ -393,6 +399,8 @@ class Simulation:
         ----------
         voltage : float
             Armature voltage command (will be saturated to max_voltage).
+        external_torque : float
+            External torque applied to the pendulum body [N·m].
         """
         dt = self._params.time_step
         v_clipped = float(np.clip(voltage, -self._params.max_voltage, self._params.max_voltage))
@@ -401,7 +409,7 @@ class Simulation:
         s = self._state
         k1, k2, k3, k4, tmp = self._k1, self._k2, self._k3, self._k4, self._tmp
 
-        self._compute_dynamics_into(s, voltage, k1)
+        self._compute_dynamics_into(s, voltage, k1, external_torque)
 
         # tmp = s + 0.5*dt*k1
         tmp[0] = s[0] + 0.5 * dt * k1[0]
@@ -409,7 +417,7 @@ class Simulation:
         tmp[2] = s[2] + 0.5 * dt * k1[2]
         tmp[3] = s[3] + 0.5 * dt * k1[3]
         tmp[4] = s[4] + 0.5 * dt * k1[4]
-        self._compute_dynamics_into(tmp, voltage, k2)
+        self._compute_dynamics_into(tmp, voltage, k2, external_torque)
 
         # tmp = s + 0.5*dt*k2
         tmp[0] = s[0] + 0.5 * dt * k2[0]
@@ -417,7 +425,7 @@ class Simulation:
         tmp[2] = s[2] + 0.5 * dt * k2[2]
         tmp[3] = s[3] + 0.5 * dt * k2[3]
         tmp[4] = s[4] + 0.5 * dt * k2[4]
-        self._compute_dynamics_into(tmp, voltage, k3)
+        self._compute_dynamics_into(tmp, voltage, k3, external_torque)
 
         # tmp = s + dt*k3
         tmp[0] = s[0] + dt * k3[0]
@@ -425,7 +433,7 @@ class Simulation:
         tmp[2] = s[2] + dt * k3[2]
         tmp[3] = s[3] + dt * k3[3]
         tmp[4] = s[4] + dt * k3[4]
-        self._compute_dynamics_into(tmp, voltage, k4)
+        self._compute_dynamics_into(tmp, voltage, k4, external_torque)
 
         # s += (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
         coeff = dt / 6.0

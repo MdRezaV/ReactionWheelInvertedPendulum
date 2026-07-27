@@ -14,13 +14,17 @@ import asyncio
 import logging
 from typing import Optional
 
+import numpy as np
+
 from auto_tuner import AutoTunerManager
 from config import DEFAULT_PHYSICS_RATE_HZ, DEFAULT_TELEMETRY_RATE_HZ
 from controller import ControllerManager
 from models import (
     ControlMode,
     ControlParameters,
-    DisturbanceRequest,
+    DisturbanceChannel,
+    DisturbanceConfig,
+    DisturbanceWaveform,
     ParamsResponse,
     SimulationParameters,
     SimulationStatus,
@@ -78,8 +82,8 @@ class SimulationManager:
         self._speed_multiplier: float = 1.0
 
         # Disturbance state
-        self._disturbance_voltage: float = 0.0
-        self._disturbance_remaining: int = 0
+        self._active_disturbances: dict[str, DisturbanceConfig] = {}
+        self._disturbance_step_counts: dict[str, int] = {}
 
         # Auto-tuner
         self._auto_tuner = AutoTunerManager(
@@ -225,8 +229,8 @@ class SimulationManager:
         self._last_voltage = 0.0
         self._last_telemetry = None
         self._warnings.clear()
-        self._disturbance_voltage = 0.0
-        self._disturbance_remaining = 0
+        self._active_disturbances.clear()
+        self._disturbance_step_counts.clear()
         await self._push_status()
         logger.info("Simulation reset.")
 
@@ -266,6 +270,7 @@ class SimulationManager:
             time=self._sim.time,
             control_mode=self._ctrl_manager.mode,
             speed_multiplier=self._speed_multiplier,
+            active_disturbances=list(self._active_disturbances.values()),
         )
 
     def get_params(self) -> ParamsResponse:
@@ -332,6 +337,7 @@ class SimulationManager:
             client_count=self._ws_manager.client_count,
             warnings=self._warnings,
             speed_multiplier=self._speed_multiplier,
+            active_disturbances=list(self._active_disturbances.values()),
         )
         await self._ws_manager.broadcast_status(event)
 
@@ -344,23 +350,35 @@ class SimulationManager:
         self._speed_multiplier = max(0.1, min(10.0, multiplier))
         logger.info("Speed multiplier set to %.2f.", self._speed_multiplier)
 
-    def apply_disturbance(self, voltage: float, duration_steps: int) -> None:
-        """Queue a disturbance voltage to be applied over subsequent steps.
+    async def apply_disturbance(self, config: DisturbanceConfig) -> None:
+        """Add a new disturbance to the active set.
 
         Parameters
         ----------
-        voltage : float
-            Disturbance voltage magnitude [V].
-        duration_steps : int
-            Number of physics steps over which to apply the disturbance.
+        config : DisturbanceConfig
+            Configuration of the disturbance to apply.
         """
-        self._disturbance_voltage = voltage
-        self._disturbance_remaining = max(1, duration_steps)
-        logger.info(
-            "Disturbance queued: %.3f V for %d steps.",
-            voltage,
-            self._disturbance_remaining,
-        )
+        self._active_disturbances[config.id] = config
+        self._disturbance_step_counts[config.id] = 0
+        await self._push_status()
+        logger.info("Disturbance applied: %s", config.id)
+
+    async def clear_disturbance(self, id: Optional[str] = None) -> None:
+        """Clear a specific disturbance by ID, or all if ID is None.
+
+        Parameters
+        ----------
+        id : Optional[str]
+            ID of the disturbance to clear. If None, clears all.
+        """
+        if id is None:
+            self._active_disturbances.clear()
+            self._disturbance_step_counts.clear()
+        else:
+            self._active_disturbances.pop(id, None)
+            self._disturbance_step_counts.pop(id, None)
+        await self._push_status()
+        logger.info("Disturbance cleared: %s", id or "all")
 
     # ------------------------------------------------------------------
     # WebSocket command dispatch (called from endpoint handler)
@@ -392,8 +410,9 @@ class SimulationManager:
             WSSetControlParamsCommand,
             WSSetControlModeCommand,
             WSSetManualVoltageCommand,
-            WSDisturbanceCommand,
             WSSetSpeedCommand,
+            WSSetDisturbanceCommand,
+            WSClearDisturbanceCommand,
             WSAutoTunerStartCommand,
             WSAutoTunerStopCommand,
         )
@@ -421,10 +440,12 @@ class SimulationManager:
                 self.set_control_mode(mode)
             case WSSetManualVoltageCommand(voltage=voltage):
                 self.set_manual_voltage(voltage)
-            case WSDisturbanceCommand(voltage=voltage, duration_steps=duration_steps):
-                self.apply_disturbance(voltage, duration_steps)
             case WSSetSpeedCommand(multiplier=multiplier):
                 self.set_speed_multiplier(multiplier)
+            case WSSetDisturbanceCommand(config=config):
+                await self.apply_disturbance(config)
+            case WSClearDisturbanceCommand(id=id):
+                await self.clear_disturbance(id)
             case WSAutoTunerStartCommand(initial_angle=initial_angle):
                 self._auto_tuner.update_params(
                     self._sim.params, self._ctrl_manager.control_params
@@ -508,6 +529,7 @@ class SimulationManager:
         """Execute a single physics step: compute voltage, integrate, update state.
 
         Uses direct state array access to avoid per-step dict allocation.
+        Evaluates all active disturbances and sums their contributions.
         """
         s = self._sim.state_array
         voltage = self._ctrl_manager.compute_voltage(
@@ -519,12 +541,43 @@ class SimulationManager:
             time=self._sim.time,
         )
 
-        # Superimpose active disturbance
-        if self._disturbance_remaining > 0:
-            voltage += self._disturbance_voltage
-            self._disturbance_remaining -= 1
-
-        self._sim.step(voltage)
+        total_dist_voltage = 0.0
+        total_dist_torque = 0.0
+        t = self._sim.time
+        
+        to_remove: list[str] = []
+        for dist_id, config in self._active_disturbances.items():
+            steps = self._disturbance_step_counts[dist_id]
+            
+            val = 0.0
+            wf = config.waveform
+            if wf == DisturbanceWaveform.constant:
+                val = config.amplitude
+            elif wf == DisturbanceWaveform.sinusoidal:
+                val = config.amplitude * np.sin(2.0 * np.pi * config.frequency * t)
+            elif wf == DisturbanceWaveform.pulse:
+                phase = (t * config.frequency) % 1.0
+                val = config.amplitude if phase < config.duty_cycle else 0.0
+            elif wf == DisturbanceWaveform.sawtooth:
+                val = config.amplitude * (2.0 * ((t * config.frequency) % 1.0) - 1.0)
+            elif wf == DisturbanceWaveform.gaussian_noise:
+                val = np.random.normal(config.mean, config.std)
+                
+            if config.channel == DisturbanceChannel.voltage:
+                total_dist_voltage += val
+            else:
+                total_dist_torque += val
+                
+            self._disturbance_step_counts[dist_id] += 1
+            if config.duration_steps > 0 and steps >= config.duration_steps:
+                to_remove.append(dist_id)
+                
+        for dist_id in to_remove:
+            del self._active_disturbances[dist_id]
+            del self._disturbance_step_counts[dist_id]
+            
+        voltage += total_dist_voltage
+        self._sim.step(voltage, external_torque=total_dist_torque)
         self._last_voltage = voltage
 
         # Guard against numerical blowup: if state contains NaN or Inf,

@@ -55,21 +55,44 @@ function roundToStep(value, step) {
   return parseFloat(value.toFixed(decimals))
 }
 
+const DISTURBANCE_WAVEFORMS = [
+  { value: 'constant', label: 'ثابت' },
+  { value: 'sinusoidal', label: 'سینوسی' },
+  { value: 'pulse', label: 'پالس' },
+  { value: 'sawtooth', label: 'دندان اره‌ای' },
+  { value: 'gaussian_noise', label: 'نویز گوسی' },
+]
+
+const DISTURBANCE_CHANNELS = [
+  { value: 'voltage', label: 'ولتاژ موتور' },
+  { value: 'torque', label: 'گشتاور پاندول' },
+]
+
 const TABS = [
   { id: 'controls', label: 'کنترل' },
   { id: 'sim-params', label: 'فیزیک' },
   { id: 'ctrl-params', label: 'بهره‌ها' },
+  { id: 'disturbances', label: 'اغتشاشات' },
 ]
 
 export default function ControlPanel({
   status, params, onStart, onStop, onReset, onStep,
-  onSetMode, onSetManualVoltage, onUpdateParams, onDisturbance, onSetSpeed,
+  onSetMode, onSetManualVoltage, onUpdateParams, onApplyDisturbance, onClearDisturbance, onSetSpeed,
 }) {
   const [activeTab, setActiveTab] = useState('controls')
   const [manualTorque, setManualTorque] = useState(0)
   const [speed, setSpeed] = useState(1.0)
   const speedSliderVal = Math.log10(Math.max(speed, 0.001))
   const [selectedMode, setSelectedMode] = useState(status?.control_mode || 'none')
+  
+  const [distChannel, setDistChannel] = useState('voltage')
+  const [distWaveform, setDistWaveform] = useState('constant')
+  const [distAmp, setDistAmp] = useState(1.0)
+  const [distFreq, setDistFreq] = useState(1.0)
+  const [distDuty, setDistDuty] = useState(0.5)
+  const [distMean, setDistMean] = useState(0.0)
+  const [distStd, setDistStd] = useState(0.1)
+  const [distDuration, setDistDuration] = useState(0)
 
   useEffect(() => {
     if (status?.control_mode) {
@@ -112,6 +135,39 @@ export default function ControlPanel({
   }, [onUpdateParams, params])
 
   const btn = 'px-2.5 py-1.5 text-[14px] font-medium rounded-md border transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.96]'
+
+  const renderDistField = (label, value, setValue, min, max, step) => (
+    <div className="flex flex-col gap-0.5">
+      <label className="text-[13px] text-text-dim">{label}</label>
+      <div className="flex items-center gap-1.5">
+        <Slider.Root
+          value={[value]}
+          min={min}
+          max={max}
+          step={step}
+          onValueChange={([v]) => setValue(v)}
+          dir="rtl"
+          className="relative flex items-center h-4 flex-1 select-none touch-none"
+        >
+          <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+            <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+          </Slider.Track>
+          <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+        </Slider.Root>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={toPersianDigits(String(value))}
+          onChange={(e) => {
+            const v = parseFloat(toWesternDigits(e.target.value))
+            if (!Number.isNaN(v)) setValue(v)
+          }}
+          className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
+          dir="ltr"
+        />
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -216,15 +272,6 @@ export default function ControlPanel({
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[13px] text-text-dim font-bold">اغتشاش</label>
-            <div className="grid grid-cols-4 gap-1">
-              <button onClick={() => onDisturbance(6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>+۶ ولت</button>
-              <button onClick={() => onDisturbance(-6, 20)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>−۶ ولت</button>
-              <button onClick={() => onDisturbance(12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>+۱۲ ولت</button>
-              <button onClick={() => onDisturbance(-12, 10)} className={`${btn} border-purple/30 text-purple bg-purple/5 text-[13px]`}>−۱۲ ولت</button>
-            </div>
-          </div>
         </Tabs.Content>
 
         <Tabs.Content value="sim-params" className="p-3 flex flex-col gap-2 overflow-y-auto flex-1 focus:outline-none">
@@ -326,6 +373,126 @@ export default function ControlPanel({
               </div>
             )
           })}
+        </Tabs.Content>
+
+        <Tabs.Content value="disturbances" className="p-3 flex flex-col gap-3 overflow-y-auto flex-1 focus:outline-none">
+          <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-surface/50">
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] text-text-dim font-bold">کانال اغتشاش</label>
+              <Select.Root value={distChannel} onValueChange={setDistChannel} dir="rtl">
+                <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
+                  <Select.Value />
+                  <Select.Icon className="text-text-dim">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content position="popper" sideOffset={4} className="bg-card border border-border-light rounded-md shadow-card overflow-hidden z-50 animate-[slide-down_150ms_ease-out]">
+                    <Select.Viewport className="p-1">
+                      {DISTURBANCE_CHANNELS.map((m) => (
+                        <Select.Item key={m.value} value={m.value} className="flex items-center px-2.5 py-1.5 text-[14px] rounded-sm text-text cursor-pointer outline-none data-[highlighted]:bg-accent-dim data-[highlighted]:text-accent data-[state=checked]:text-accent">
+                          <Select.ItemText>{m.label}</Select.ItemText>
+                          <Select.ItemIndicator className="ms-auto pe-1">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] text-text-dim font-bold">نوع موج</label>
+              <Select.Root value={distWaveform} onValueChange={setDistWaveform} dir="rtl">
+                <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
+                  <Select.Value />
+                  <Select.Icon className="text-text-dim">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content position="popper" sideOffset={4} className="bg-card border border-border-light rounded-md shadow-card overflow-hidden z-50 animate-[slide-down_150ms_ease-out]">
+                    <Select.Viewport className="p-1">
+                      {DISTURBANCE_WAVEFORMS.map((m) => (
+                        <Select.Item key={m.value} value={m.value} className="flex items-center px-2.5 py-1.5 text-[14px] rounded-sm text-text cursor-pointer outline-none data-[highlighted]:bg-accent-dim data-[highlighted]:text-accent data-[state=checked]:text-accent">
+                          <Select.ItemText>{m.label}</Select.ItemText>
+                          <Select.ItemIndicator className="ms-auto pe-1">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+
+            {renderDistField('دامنه', distAmp, setDistAmp, -10, 10, 0.1)}
+            {(distWaveform === 'sinusoidal' || distWaveform === 'pulse' || distWaveform === 'sawtooth') && renderDistField('فرکانس (Hz)', distFreq, setDistFreq, 0, 10, 0.1)}
+            {distWaveform === 'pulse' && renderDistField('دuty cycle', distDuty, setDistDuty, 0, 1, 0.05)}
+            {distWaveform === 'gaussian_noise' && (
+              <>
+                {renderDistField('میانگین', distMean, setDistMean, -5, 5, 0.1)}
+                {renderDistField('انحراف معیار', distStd, setDistStd, 0, 5, 0.01)}
+              </>
+            )}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] text-text-dim font-bold">مدت زمان (گام)</label>
+              <input
+                type="number"
+                value={distDuration}
+                onChange={(e) => setDistDuration(parseInt(e.target.value) || 0)}
+                className="w-full px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
+                dir="ltr"
+                min="0"
+              />
+              <span className="text-[11px] text-text-dim/50 text-center">۰ برای دائم</span>
+            </div>
+
+            <button onClick={() => onApplyDisturbance({
+              channel: distChannel,
+              waveform: distWaveform,
+              amplitude: distAmp,
+              frequency: distFreq,
+              duty_cycle: distDuty,
+              mean: distMean,
+              std: distStd,
+              duration_steps: distDuration,
+            })} className={`${btn} border-accent/30 text-accent bg-accent/5`}>اعمال اغتشاش</button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[13px] text-text-dim font-bold">اغتشاشات فعال</label>
+              {status?.active_disturbances?.length > 0 && (
+                <button onClick={() => onClearDisturbance(null)} className="text-[12px] text-danger hover:text-danger/80 cursor-pointer">حذف همه</button>
+              )}
+            </div>
+            {status?.active_disturbances?.length === 0 && (
+              <p className="text-[12px] text-text-dim/50 text-center py-4">هیچ اغتشاش فعالی وجود ندارد</p>
+            )}
+            {status?.active_disturbances?.map((d) => (
+              <div key={d.id} className="flex items-center justify-between p-2 rounded border border-border bg-card text-[12px]">
+                <div className="flex flex-col">
+                  <span className="text-text-h font-bold">
+                    {DISTURBANCE_CHANNELS.find(c => c.value === d.channel)?.label} - {DISTURBANCE_WAVEFORMS.find(w => w.value === d.waveform)?.label}
+                  </span>
+                  <span className="text-text-dim/70 font-mono">
+                    amp: {d.amplitude} 
+                    {['sinusoidal', 'pulse', 'sawtooth'].includes(d.waveform) ? `, freq: ${d.frequency}` : ''}
+                    {d.waveform === 'pulse' ? `, duty: ${d.duty_cycle}` : ''}
+                    {d.waveform === 'gaussian_noise' ? `, mean: ${d.mean}, std: ${d.std}` : ''}
+                  </span>
+                </div>
+                <button onClick={() => onClearDisturbance(d.id)} className="text-danger hover:text-danger/80 cursor-pointer px-2">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
         </Tabs.Content>
       </Tabs.Root>
     </div>

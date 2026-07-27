@@ -54,8 +54,9 @@ from models import (
     WSSetControlParamsCommand,
     WSSetControlModeCommand,
     WSSetManualVoltageCommand,
-    WSDisturbanceCommand,
     WSSetSpeedCommand,
+    WSSetDisturbanceCommand,
+    WSClearDisturbanceCommand,
     WSAutoTunerStartCommand,
     WSAutoTunerStopCommand,
 )
@@ -78,8 +79,9 @@ _COMMAND_REGISTRY: dict[str, type[WSCommand]] = {
     "set_control_params": WSSetControlParamsCommand,
     "set_control_mode": WSSetControlModeCommand,
     "set_manual_voltage": WSSetManualVoltageCommand,
-    "apply_disturbance": WSDisturbanceCommand,
     "set_speed": WSSetSpeedCommand,
+    "set_disturbance": WSSetDisturbanceCommand,
+    "clear_disturbance": WSClearDisturbanceCommand,
     "auto_tuner_start": WSAutoTunerStartCommand,
     "auto_tuner_stop": WSAutoTunerStopCommand,
 }

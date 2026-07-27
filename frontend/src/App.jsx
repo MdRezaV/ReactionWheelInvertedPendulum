@@ -36,9 +36,14 @@ function App() {
     catch (err) { addError(`بروزرسانی پارامتر ناموفق: ${err.message}`) }
   }, [api, addError])
 
-  const handleDisturbance = useCallback(async (voltage, durationSteps) => {
-    try { await api.applyDisturbance(voltage, durationSteps) }
-    catch (err) { addError(`اغتشاش ناموفق: ${err.message}`) }
+  const handleApplyDisturbance = useCallback(async (config) => {
+    try { await api.applyDisturbance(config) }
+    catch (err) { addError(`اعمال اغتشاش ناموفق: ${err.message}`) }
+  }, [api, addError])
+
+  const handleClearDisturbance = useCallback(async (id = null) => {
+    try { await api.clearDisturbance(id) }
+    catch (err) { addError(`حذف اغتشاش ناموفق: ${err.message}`) }
   }, [api, addError])
 
   const handleSetSpeed = useCallback(async (multiplier) => {
@@ -84,7 +89,8 @@ function App() {
                 onSetMode={handleSetMode}
                 onSetManualVoltage={handleSetManualVoltage}
                 onUpdateParams={handleUpdateParams}
-                onDisturbance={handleDisturbance}
+                onApplyDisturbance={handleApplyDisturbance}
+                onClearDisturbance={handleClearDisturbance}
                 onSetSpeed={handleSetSpeed}
               />
             </aside>
