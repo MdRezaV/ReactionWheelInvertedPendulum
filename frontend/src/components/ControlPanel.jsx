@@ -75,6 +75,19 @@ const TABS = [
   { id: 'disturbances', label: 'اغتشاشات' },
 ]
 
+const DEGREE_PRESETS = [5, 10, 15, 20, 30]
+
+const INITIAL_STATE_PARAMS = [
+  { key: 'initial_theta', label: 'زاویه اولیه پاندول', unit: 'درجه', min: -180, max: 180, step: 0.5, isAngle: true },
+  { key: 'initial_theta_dot', label: 'سرعت زاویه‌ای اولیه پاندول', unit: 'رادیان/ثانیه', min: -10, max: 10, step: 0.1, isAngle: false },
+  { key: 'initial_phi', label: 'زاویه اولیه چرخ', unit: 'درجه', min: -180, max: 180, step: 0.5, isAngle: true },
+  { key: 'initial_phi_dot', label: 'سرعت زاویه‌ای اولیه چرخ', unit: 'رادیان/ثانیه', min: -50, max: 50, step: 0.5, isAngle: false },
+  { key: 'initial_current', label: 'جریان اولیه موتور', unit: 'آمپر', min: -5, max: 5, step: 0.01, isAngle: false },
+]
+
+const toRadians = (deg) => deg * Math.PI / 180
+const toDegrees = (rad) => rad * 180 / Math.PI
+
 function NumberInput({ value, onCommit, className }) {
   const [draft, setDraft] = useState(null)
   const typingRef = useRef(false)
@@ -305,6 +318,59 @@ export default function ControlPanel({
               <span>۱×</span>
               <span>۵×</span>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-surface/50">
+            <label className="text-[13px] text-text-dim font-bold">نقطه شروع (پس از بازنشانی)</label>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] text-text-dim/70">پریست زاویه پاندول</label>
+              <div className="flex gap-1">
+                {DEGREE_PRESETS.map((deg) => (
+                  <button
+                    key={deg}
+                    onClick={() => handleParamChange('simulation', 'initial_theta', String(toRadians(deg)))}
+                    className="flex-1 py-1 text-[12px] font-mono rounded border border-border bg-card text-text-dim cursor-pointer hover:text-accent hover:border-accent-border transition-colors"
+                  >
+                    {toPersianDigits(String(deg))}°
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {INITIAL_STATE_PARAMS.map((p) => {
+              const rawVal = localOverrides[p.key] ?? params?.simulation?.[p.key] ?? 0
+              const val = p.isAngle ? toDegrees(rawVal) : rawVal
+              return (
+                <div key={p.key} className="flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[13px] text-text-dim">{p.label}</label>
+                    <span className="text-[12px] text-text-dim/60">{p.unit}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Slider.Root
+                      value={[val]}
+                      min={p.min}
+                      max={p.max}
+                      step={p.step}
+                      onValueChange={([v]) => handleParamChange('simulation', p.key, String(p.isAngle ? toRadians(v) : v))}
+                      dir="rtl"
+                      className="relative flex items-center h-4 flex-1 select-none touch-none"
+                    >
+                      <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                        <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+                      </Slider.Track>
+                      <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+                    </Slider.Root>
+                    <NumberInput
+                      value={val}
+                      onCommit={(v) => handleParamChange('simulation', p.key, String(p.isAngle ? toRadians(v) : v))}
+                      className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
         </Tabs.Content>
