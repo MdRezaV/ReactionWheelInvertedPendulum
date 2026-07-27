@@ -65,8 +65,8 @@ class SimulationParameters(BaseModel):
     wheel_inertia: Optional[float] = Field(
         default=None, gt=0, description="Wheel moment of inertia [kg·m²]; computed if None"
     )
-    damping: float = Field(default=0.01, ge=0, description="Pendulum joint damping [N·m·s/rad]")
-    wheel_damping: float = Field(default=0.001, ge=0, description="Wheel bearing damping [N·m·s/rad]")
+    damping: float = Field(default=0.0, ge=0, description="Pendulum joint damping [N·m·s/rad]")
+    wheel_damping: float = Field(default=0.0, ge=0, description="Wheel bearing damping [N·m·s/rad]")
     gravity: float = Field(default=9.81, gt=0, description="Gravitational acceleration [m/s²]")
     time_step: float = Field(default=0.001, gt=0, description="Integration time step [s]")
     max_voltage: float = Field(default=12.0, gt=0, description="Maximum applied voltage [V]")
@@ -80,7 +80,7 @@ class SimulationParameters(BaseModel):
     )
     motor_rotor_inertia: float = Field(default=1e-5, gt=0, description="Motor rotor inertia [kg·m²]")
     motor_viscous_friction: float = Field(
-        default=1e-5, ge=0, description="Motor viscous friction [N·m·s/rad]"
+        default=0.0, ge=0, description="Motor viscous friction [N·m·s/rad]"
     )
     gear_ratio: float = Field(default=10.0, gt=0, description="Gearbox ratio N (motor_speed = N * wheel_speed)")
     initial_theta: float = Field(default=0.05, description="Initial pendulum angle [rad]")

@@ -55,11 +55,13 @@ class Simulation:
         self._validate_physical_quantities()
         # State vector: [theta, theta_dot, phi, phi_dot, i_a]
         self._state: np.ndarray = np.zeros(5, dtype=np.float64)
-        # Pre-allocated RK4 buffers (avoids 4 array allocations per step)
+        # Pre-allocated RK5 buffers (avoids 6 array allocations per step)
         self._k1: np.ndarray = np.zeros(5, dtype=np.float64)
         self._k2: np.ndarray = np.zeros(5, dtype=np.float64)
         self._k3: np.ndarray = np.zeros(5, dtype=np.float64)
         self._k4: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._k5: np.ndarray = np.zeros(5, dtype=np.float64)
+        self._k6: np.ndarray = np.zeros(5, dtype=np.float64)
         self._tmp: np.ndarray = np.zeros(5, dtype=np.float64)
         self.reset()
 
@@ -151,7 +153,6 @@ class Simulation:
             [p.initial_theta, p.initial_theta_dot, p.initial_phi, p.initial_phi_dot, p.initial_current],
             dtype=np.float64,
         )
-        self._state[np.abs(self._state) < _DEAD_ZONE] = 0.0
         self._time = 0.0
         self._last_voltage = 0.0
         self._last_current = 0.0
@@ -391,9 +392,11 @@ class Simulation:
         out[4] = (v - self._R * i_a - self._Ke * self._N * phi_dot) / self._L
 
     def step(self, voltage: float, external_torque: float = 0.0) -> None:
-        """Advance the simulation by one fixed time step using RK4.
+        """Advance the simulation by one fixed time step using 5th-order RK.
 
-        Uses pre-allocated buffers to avoid per-step array allocations.
+        Uses Butcher's 5th-order Runge-Kutta method for improved accuracy
+        and better energy conservation over long durations. Pre-allocated
+        buffers avoid per-step array allocations.
 
         Parameters
         ----------
@@ -407,48 +410,68 @@ class Simulation:
         self._last_voltage = v_clipped if abs(v_clipped) >= _DEAD_ZONE else 0.0
 
         s = self._state
-        k1, k2, k3, k4, tmp = self._k1, self._k2, self._k3, self._k4, self._tmp
+        k1, k2, k3, k4, k5, k6, tmp = (
+            self._k1, self._k2, self._k3, self._k4, self._k5, self._k6, self._tmp
+        )
 
         self._compute_dynamics_into(s, voltage, k1, external_torque)
 
-        # tmp = s + 0.5*dt*k1
-        tmp[0] = s[0] + 0.5 * dt * k1[0]
-        tmp[1] = s[1] + 0.5 * dt * k1[1]
-        tmp[2] = s[2] + 0.5 * dt * k1[2]
-        tmp[3] = s[3] + 0.5 * dt * k1[3]
-        tmp[4] = s[4] + 0.5 * dt * k1[4]
+        # k2: tmp = s + 0.25*dt*k1
+        tmp[0] = s[0] + 0.25 * dt * k1[0]
+        tmp[1] = s[1] + 0.25 * dt * k1[1]
+        tmp[2] = s[2] + 0.25 * dt * k1[2]
+        tmp[3] = s[3] + 0.25 * dt * k1[3]
+        tmp[4] = s[4] + 0.25 * dt * k1[4]
         self._compute_dynamics_into(tmp, voltage, k2, external_torque)
 
-        # tmp = s + 0.5*dt*k2
-        tmp[0] = s[0] + 0.5 * dt * k2[0]
-        tmp[1] = s[1] + 0.5 * dt * k2[1]
-        tmp[2] = s[2] + 0.5 * dt * k2[2]
-        tmp[3] = s[3] + 0.5 * dt * k2[3]
-        tmp[4] = s[4] + 0.5 * dt * k2[4]
+        # k3: tmp = s + (1/8)*dt*k1 + (1/8)*dt*k2
+        tmp[0] = s[0] + 0.125 * dt * (k1[0] + k2[0])
+        tmp[1] = s[1] + 0.125 * dt * (k1[1] + k2[1])
+        tmp[2] = s[2] + 0.125 * dt * (k1[2] + k2[2])
+        tmp[3] = s[3] + 0.125 * dt * (k1[3] + k2[3])
+        tmp[4] = s[4] + 0.125 * dt * (k1[4] + k2[4])
         self._compute_dynamics_into(tmp, voltage, k3, external_torque)
 
-        # tmp = s + dt*k3
-        tmp[0] = s[0] + dt * k3[0]
-        tmp[1] = s[1] + dt * k3[1]
-        tmp[2] = s[2] + dt * k3[2]
-        tmp[3] = s[3] + dt * k3[3]
-        tmp[4] = s[4] + dt * k3[4]
+        # k4: tmp = s - 0.5*dt*k2 + dt*k3
+        tmp[0] = s[0] + dt * (-0.5 * k2[0] + k3[0])
+        tmp[1] = s[1] + dt * (-0.5 * k2[1] + k3[1])
+        tmp[2] = s[2] + dt * (-0.5 * k2[2] + k3[2])
+        tmp[3] = s[3] + dt * (-0.5 * k2[3] + k3[3])
+        tmp[4] = s[4] + dt * (-0.5 * k2[4] + k3[4])
         self._compute_dynamics_into(tmp, voltage, k4, external_torque)
 
-        # s += (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
-        coeff = dt / 6.0
-        s[0] += coeff * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
-        s[1] += coeff * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
-        s[2] += coeff * (k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2])
-        s[3] += coeff * (k1[3] + 2.0 * k2[3] + 2.0 * k3[3] + k4[3])
-        s[4] += coeff * (k1[4] + 2.0 * k2[4] + 2.0 * k3[4] + k4[4])
+        # k5: tmp = s + (3/16)*dt*k1 + (9/16)*dt*k4
+        tmp[0] = s[0] + dt * (0.1875 * k1[0] + 0.5625 * k4[0])
+        tmp[1] = s[1] + dt * (0.1875 * k1[1] + 0.5625 * k4[1])
+        tmp[2] = s[2] + dt * (0.1875 * k1[2] + 0.5625 * k4[2])
+        tmp[3] = s[3] + dt * (0.1875 * k1[3] + 0.5625 * k4[3])
+        tmp[4] = s[4] + dt * (0.1875 * k1[4] + 0.5625 * k4[4])
+        self._compute_dynamics_into(tmp, voltage, k5, external_torque)
 
-        # Snap near-zero state values to exact zero (dead-zone)
-        s[np.abs(s) < _DEAD_ZONE] = 0.0
+        # k6: tmp = s + (-3/7)*dt*k1 + (2/7)*dt*k2 + (12/7)*dt*k3 - (12/7)*dt*k4 + (8/7)*dt*k5
+        c1 = -3.0 / 7.0
+        c2 = 2.0 / 7.0
+        c3 = 12.0 / 7.0
+        c4 = -12.0 / 7.0
+        c5 = 8.0 / 7.0
+        tmp[0] = s[0] + dt * (c1 * k1[0] + c2 * k2[0] + c3 * k3[0] + c4 * k4[0] + c5 * k5[0])
+        tmp[1] = s[1] + dt * (c1 * k1[1] + c2 * k2[1] + c3 * k3[1] + c4 * k4[1] + c5 * k5[1])
+        tmp[2] = s[2] + dt * (c1 * k1[2] + c2 * k2[2] + c3 * k3[2] + c4 * k4[2] + c5 * k5[2])
+        tmp[3] = s[3] + dt * (c1 * k1[3] + c2 * k2[3] + c3 * k3[3] + c4 * k4[3] + c5 * k5[3])
+        tmp[4] = s[4] + dt * (c1 * k1[4] + c2 * k2[4] + c3 * k3[4] + c4 * k4[4] + c5 * k5[4])
+        self._compute_dynamics_into(tmp, voltage, k6, external_torque)
 
-        # Store quantities from the final RK4 evaluation for telemetry
-        self._last_theta_ddot = float(k4[1]) if abs(k4[1]) >= _DEAD_ZONE else 0.0
-        self._last_phi_ddot = float(k4[3]) if abs(k4[3]) >= _DEAD_ZONE else 0.0
+        # s += (dt/90)*(7*k1 + 32*k3 + 12*k4 + 32*k5 + 7*k6)
+        coeff = dt / 90.0
+        s[0] += coeff * (7.0 * k1[0] + 32.0 * k3[0] + 12.0 * k4[0] + 32.0 * k5[0] + 7.0 * k6[0])
+        s[1] += coeff * (7.0 * k1[1] + 32.0 * k3[1] + 12.0 * k4[1] + 32.0 * k5[1] + 7.0 * k6[1])
+        s[2] += coeff * (7.0 * k1[2] + 32.0 * k3[2] + 12.0 * k4[2] + 32.0 * k5[2] + 7.0 * k6[2])
+        s[3] += coeff * (7.0 * k1[3] + 32.0 * k3[3] + 12.0 * k4[3] + 32.0 * k5[3] + 7.0 * k6[3])
+        s[4] += coeff * (7.0 * k1[4] + 32.0 * k3[4] + 12.0 * k4[4] + 32.0 * k5[4] + 7.0 * k6[4])
+
+        # Store quantities from the final RK5 evaluation for telemetry
+        self._last_theta_ddot = float(k6[1])
+        self._last_phi_ddot = float(k6[3])
         self._last_current = float(s[4])
 
         # Cache energy for this step (avoids recomputation in controller + telemetry)
@@ -458,8 +481,7 @@ class Simulation:
             + self._M22 * s[3] ** 2
         )
         pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
-        total_e = float(ke + pe)
-        self._last_energy = total_e if abs(total_e) >= _DEAD_ZONE else 0.0
+        self._last_energy = float(ke + pe)
 
         # Normalize angles
         s[0] = _wrap_angle(s[0])
