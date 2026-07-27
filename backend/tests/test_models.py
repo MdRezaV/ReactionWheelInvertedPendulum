@@ -24,7 +24,8 @@ class TestSimulationParametersDefaults:
         assert params.pendulum_mass == 1.0
         assert params.pendulum_length == 0.5
         assert params.wheel_mass == 0.5
-        assert params.wheel_radius == 0.05
+        assert params.wheel_inner_radius == 0.04
+        assert params.wheel_outer_radius == 0.05
         assert params.gravity == 9.81
         assert params.time_step == 0.001
         assert params.damping == 0.01
@@ -75,8 +76,10 @@ class TestSimulationParametersValidation:
         ("pendulum_length", -0.5),
         ("wheel_mass", 0.0),
         ("wheel_mass", -2.0),
-        ("wheel_radius", 0.0),
-        ("wheel_radius", -0.01),
+        ("wheel_inner_radius", 0.0),
+        ("wheel_inner_radius", -0.01),
+        ("wheel_outer_radius", 0.0),
+        ("wheel_outer_radius", -0.01),
         ("time_step", 0.0),
         ("time_step", -0.001),
         ("gravity", 0.0),
@@ -113,6 +116,12 @@ class TestSimulationParametersValidation:
     def test_rejects_negative_motor_viscous_friction(self):
         with pytest.raises(ValidationError):
             SimulationParameters(motor_viscous_friction=-1e-5)
+
+    def test_rejects_inner_radius_not_less_than_outer(self):
+        with pytest.raises(ValidationError, match="wheel_inner_radius must be strictly less than wheel_outer_radius"):
+            SimulationParameters(wheel_inner_radius=0.05, wheel_outer_radius=0.05)
+        with pytest.raises(ValidationError, match="wheel_inner_radius must be strictly less than wheel_outer_radius"):
+            SimulationParameters(wheel_inner_radius=0.06, wheel_outer_radius=0.05)
 
     def test_rejects_com_exceeding_length(self):
         with pytest.raises(ValidationError, match="pendulum_com_length cannot exceed"):

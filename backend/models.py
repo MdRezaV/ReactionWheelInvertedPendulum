@@ -53,7 +53,8 @@ class SimulationParameters(BaseModel):
         default=None, gt=0, description="Pendulum moment of inertia [kg·m²]; computed if None"
     )
     wheel_mass: float = Field(default=0.5, gt=0, description="Reaction wheel mass [kg]")
-    wheel_radius: float = Field(default=0.05, gt=0, description="Reaction wheel radius [m]")
+    wheel_inner_radius: float = Field(default=0.04, gt=0, description="Reaction wheel inner radius [m]")
+    wheel_outer_radius: float = Field(default=0.05, gt=0, description="Reaction wheel outer radius [m]")
     wheel_inertia: Optional[float] = Field(
         default=None, gt=0, description="Wheel moment of inertia [kg·m²]; computed if None"
     )
@@ -85,6 +86,12 @@ class SimulationParameters(BaseModel):
     def _validate_com_within_length(self) -> "SimulationParameters":
         if self.pendulum_com_length is not None and self.pendulum_com_length > self.pendulum_length:
             raise ValueError("pendulum_com_length cannot exceed pendulum_length")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_wheel_radii(self) -> "SimulationParameters":
+        if self.wheel_inner_radius >= self.wheel_outer_radius:
+            raise ValueError("wheel_inner_radius must be strictly less than wheel_outer_radius")
         return self
 
     @model_validator(mode="after")

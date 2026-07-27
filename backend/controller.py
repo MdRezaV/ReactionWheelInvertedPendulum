@@ -280,7 +280,9 @@ class LQRController(Controller):
             I_w = (
                 sim_params.wheel_inertia
                 if sim_params.wheel_inertia is not None
-                else 0.5 * sim_params.wheel_mass * sim_params.wheel_radius ** 2
+                else 0.5 * sim_params.wheel_mass * (
+                    sim_params.wheel_outer_radius ** 2 + sim_params.wheel_inner_radius ** 2
+                )
             )
 
             M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w

@@ -17,7 +17,8 @@ const SIM_PARAMS = [
   { key: 'pendulum_mass', label: 'جرم پاندول', unit: 'کیلوگرم', min: 0.1, max: 5, step: 0.1 },
   { key: 'pendulum_length', label: 'طول پاندول', unit: 'متر', min: 0.1, max: 2, step: 0.05 },
   { key: 'wheel_mass', label: 'جرم چرخ', unit: 'کیلوگرم', min: 0.05, max: 2, step: 0.05 },
-  { key: 'wheel_radius', label: 'شعاع چرخ', unit: 'متر', min: 0.01, max: 0.2, step: 0.005 },
+  { key: 'wheel_inner_radius', label: 'شعاع داخلی چرخ', unit: 'متر', min: 0.001, max: 0.2, step: 0.001 },
+  { key: 'wheel_outer_radius', label: 'شعاع خارجی چرخ', unit: 'متر', min: 0.01, max: 0.2, step: 0.005 },
   { key: 'damping', label: 'میرایی', unit: 'نیوتن·متر·ثانیه', min: 0, max: 0.5, step: 0.005 },
   { key: 'wheel_damping', label: 'میرایی چرخ', unit: 'نیوتن·متر·ثانیه', min: 0, max: 0.1, step: 0.001 },
   { key: 'gravity', label: 'گرانش', unit: 'متر/ثانیه²', min: 1, max: 20, step: 0.1 },
@@ -79,20 +80,36 @@ export default function ControlPanel({
   const isRunning = status?.status === 'running'
   const isStopped = status?.status === 'stopped'
 
+  const [localOverrides, setLocalOverrides] = useState({})
+
+  useEffect(() => {
+    setLocalOverrides({})
+  }, [params])
+
   const debounceRef = useRef(null)
   const pendingRef = useRef({})
 
   const handleParamChange = useCallback((scope, key, value) => {
     const numVal = parseFloat(value)
     if (Number.isNaN(numVal)) return
+    setLocalOverrides(prev => ({ ...prev, [key]: numVal }))
+
     if (!pendingRef.current[scope]) pendingRef.current[scope] = {}
     pendingRef.current[scope][key] = numVal
+
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      onUpdateParams(pendingRef.current)
+      const payload = {}
+      if (pendingRef.current.simulation) {
+        payload.simulation = { ...(params?.simulation || {}), ...pendingRef.current.simulation }
+      }
+      if (pendingRef.current.control) {
+        payload.control = { ...(params?.control || {}), ...pendingRef.current.control }
+      }
+      onUpdateParams(payload)
       pendingRef.current = {}
     }, 100)
-  }, [onUpdateParams])
+  }, [onUpdateParams, params])
 
   const btn = 'px-2.5 py-1.5 text-[14px] font-medium rounded-md border transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.96]'
 
@@ -212,7 +229,11 @@ export default function ControlPanel({
 
         <Tabs.Content value="sim-params" className="p-3 flex flex-col gap-2 overflow-y-auto flex-1 focus:outline-none">
           {SIM_PARAMS.map((p) => {
-            const val = params?.simulation?.[p.key] ?? p.min
+            const val = localOverrides[p.key] ?? params?.simulation?.[p.key] ?? p.min
+            const outerRadius = localOverrides['wheel_outer_radius'] ?? params?.simulation?.wheel_outer_radius ?? 0.05
+            const effectiveMax = p.key === 'wheel_inner_radius'
+              ? Math.max(p.min, parseFloat(outerRadius) - p.step)
+              : p.max
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
                 <div className="flex items-center justify-between">
@@ -223,7 +244,7 @@ export default function ControlPanel({
                   <Slider.Root
                     value={[val]}
                     min={p.min}
-                    max={p.max}
+                    max={effectiveMax}
                     step={p.step}
                     onValueChange={([v]) => handleParamChange('simulation', p.key, String(v))}
                     dir="rtl"
@@ -245,7 +266,7 @@ export default function ControlPanel({
                     />
                     <div className="flex flex-col gap-px">
                       <button
-                        onClick={() => handleParamChange('simulation', p.key, String(Math.min(roundToStep(val + p.step, p.step), p.max)))}
+                        onClick={() => handleParamChange('simulation', p.key, String(Math.min(roundToStep(val + p.step, p.step), effectiveMax)))}
                         className="w-4 h-3.5 flex items-center justify-center text-[8px] text-text-dim bg-card border border-border rounded-t cursor-pointer hover:text-accent hover:border-accent-border transition-colors leading-none"
                       >▲</button>
                       <button
@@ -262,7 +283,7 @@ export default function ControlPanel({
 
         <Tabs.Content value="ctrl-params" className="p-3 flex flex-col gap-2 overflow-y-auto flex-1 focus:outline-none">
           {CTRL_PARAMS.map((p) => {
-            const val = params?.control?.[p.key] ?? p.min
+            const val = localOverrides[p.key] ?? params?.control?.[p.key] ?? p.min
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
                 <label className="text-[13px] text-text-dim">{p.label}</label>

@@ -11,7 +11,7 @@ export default function PendulumCanvas({ latest, params }) {
   const animRef = useRef(null)
   const TRAIL_LEN = 28
   const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, smoothSpeedNorm: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
-  const dimsRef = useRef({ armLength: 70, wheelRadius: 12 })
+  const dimsRef = useRef({ armLength: 70, wheelRadius: 12, wheelInnerRadius: 6 })
 
   useEffect(() => {
     if (latest) {
@@ -26,11 +26,13 @@ export default function PendulumCanvas({ latest, params }) {
   useEffect(() => {
     if (params?.simulation) {
       const len = params.simulation.pendulum_length ?? 0.3
-      const rad = params.simulation.wheel_radius ?? 0.05
+      const rad = params.simulation.wheel_outer_radius ?? 0.05
+      const innerRad = params.simulation.wheel_inner_radius ?? 0.04
       const usable = 130
       const scale = Math.min(Math.max(usable / (len + rad), MIN_SCALE), MAX_SCALE)
       dimsRef.current.armLength = Math.max(len * scale, MIN_ARM_PX)
       dimsRef.current.wheelRadius = Math.max(rad * scale, MIN_WHEEL_PX)
+      dimsRef.current.wheelInnerRadius = Math.max(innerRad * scale, MIN_WHEEL_PX)
     }
   }, [params])
 
@@ -67,6 +69,7 @@ export default function PendulumCanvas({ latest, params }) {
       const scaleFactor = size / 300
       const armLength = dimsRef.current.armLength * scaleFactor
       const wheelRadius = dimsRef.current.wheelRadius * scaleFactor
+      const wheelInnerRadius = Math.min(dimsRef.current.wheelInnerRadius * scaleFactor, wheelRadius * 0.85)
 
       const { theta, theta_dot, phi_dot, voltage, current } = stateRef.current
 
@@ -187,6 +190,12 @@ export default function PendulumCanvas({ latest, params }) {
       ctx.translate(tipX, tipY)
       ctx.rotate(wheelAngle)
 
+      ctx.beginPath()
+      ctx.arc(0, 0, wheelRadius, 0, Math.PI * 2)
+      ctx.arc(0, 0, wheelInnerRadius, 0, Math.PI * 2, true)
+      ctx.fillStyle = 'rgba(86, 204, 242, 0.12)'
+      ctx.fill('evenodd')
+
       ctx.strokeStyle = '#56ccf2'
       ctx.lineWidth = 2.5
       ctx.beginPath()
@@ -195,10 +204,14 @@ export default function PendulumCanvas({ latest, params }) {
 
       ctx.strokeStyle = '#56ccf266'
       ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.arc(0, 0, wheelInnerRadius, 0, Math.PI * 2)
+      ctx.stroke()
+
       for (let i = 0; i < 4; i++) {
         const a = (Math.PI / 2) * i
         ctx.beginPath()
-        ctx.moveTo(0, 0)
+        ctx.moveTo(wheelInnerRadius * Math.cos(a), wheelInnerRadius * Math.sin(a))
         ctx.lineTo(wheelRadius * Math.cos(a), wheelRadius * Math.sin(a))
         ctx.stroke()
       }

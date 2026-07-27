@@ -83,10 +83,10 @@ class Simulation:
             else (1.0 / 3.0) * p.pendulum_mass * p.pendulum_length ** 2
         )
 
-        # Wheel moment of inertia (solid cylinder fallback)
+        # Wheel moment of inertia (annular ring fallback)
         self._I_w: float = (
             p.wheel_inertia if p.wheel_inertia is not None
-            else 0.5 * p.wheel_mass * p.wheel_radius ** 2
+            else 0.5 * p.wheel_mass * (p.wheel_outer_radius ** 2 + p.wheel_inner_radius ** 2)
         )
 
         # Gearbox-reflected motor parameters to wheel side

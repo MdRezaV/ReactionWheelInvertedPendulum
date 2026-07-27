@@ -432,17 +432,19 @@ class TestGearboxEffect:
         N = 10.0
         J_m = 1e-5
         wheel_mass = 0.5
-        wheel_radius = 0.05
+        wheel_inner_radius = 0.04
+        wheel_outer_radius = 0.05
         params = SimulationParameters(
             gear_ratio=N,
             motor_rotor_inertia=J_m,
             wheel_mass=wheel_mass,
-            wheel_radius=wheel_radius,
+            wheel_inner_radius=wheel_inner_radius,
+            wheel_outer_radius=wheel_outer_radius,
         )
         sim = Simulation(params)
 
-        # Solid cylinder fallback: I_w = 0.5 * m * r²
-        I_w = 0.5 * wheel_mass * wheel_radius ** 2
+        # Annular ring fallback: I_w = 0.5 * m * (r_outer^2 + r_inner^2)
+        I_w = 0.5 * wheel_mass * (wheel_outer_radius ** 2 + wheel_inner_radius ** 2)
         expected_I_w_eff = I_w + J_m * N ** 2
 
         # M22 in the inertia matrix equals I_w_eff
