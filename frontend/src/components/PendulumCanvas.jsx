@@ -10,12 +10,12 @@ export default function PendulumCanvas({ latest, params }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const TRAIL_LEN = 28
-  const stateRef = useRef({ theta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, smoothSpeedNorm: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
+  const stateRef = useRef({ theta: 0, targetTheta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, smoothSpeedNorm: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
   const dimsRef = useRef({ armLength: 70, wheelRadius: 12, wheelInnerRadius: 6 })
 
   useEffect(() => {
     if (latest) {
-      stateRef.current.theta = latest.theta
+      stateRef.current.targetTheta = latest.theta
       stateRef.current.theta_dot = latest.theta_dot ?? 0
       stateRef.current.phi_dot = latest.phi_dot
       stateRef.current.voltage = latest.voltage ?? 0
@@ -71,13 +71,21 @@ export default function PendulumCanvas({ latest, params }) {
       const wheelRadius = dimsRef.current.wheelRadius * scaleFactor
       const wheelInnerRadius = Math.min(dimsRef.current.wheelInnerRadius * scaleFactor, wheelRadius * 0.85)
 
-      const { theta, theta_dot, phi_dot, voltage, current } = stateRef.current
-
       const dt = stateRef.current.lastTime > 0
         ? Math.min((timestamp - stateRef.current.lastTime) / 1000, 0.05)
         : 0.016
       stateRef.current.lastTime = timestamp
-      stateRef.current.wheelAngle += phi_dot * dt
+
+      // Dead-reckon theta for smooth 60fps motion between telemetry updates
+      const targetTheta = stateRef.current.targetTheta
+      let diff = targetTheta - stateRef.current.theta
+      while (diff > Math.PI) diff -= Math.PI * 2
+      while (diff < -Math.PI) diff += Math.PI * 2
+      stateRef.current.theta += stateRef.current.theta_dot * dt + diff * Math.min(dt * 10, 1)
+
+      stateRef.current.wheelAngle += stateRef.current.phi_dot * dt
+
+      const { theta, theta_dot, phi_dot, voltage, current } = stateRef.current
       const wheelAngle = stateRef.current.wheelAngle
 
       const tipX = cx + armLength * Math.sin(theta)
