@@ -13,7 +13,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import msgpack
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
