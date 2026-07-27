@@ -75,6 +75,47 @@ const TABS = [
   { id: 'disturbances', label: 'اغتشاشات' },
 ]
 
+function NumberInput({ value, onCommit, className }) {
+  const [draft, setDraft] = useState(null)
+  const typingRef = useRef(false)
+
+  useEffect(() => {
+    if (!typingRef.current) {
+      setDraft(null)
+    }
+  }, [value])
+
+  const handleChange = (e) => {
+    typingRef.current = true
+    const western = toWesternDigits(e.target.value)
+    setDraft(western)
+    const num = parseFloat(western)
+    if (!Number.isNaN(num)) {
+      onCommit(num)
+    }
+  }
+
+  const handleBlur = () => {
+    typingRef.current = false
+    setDraft(null)
+  }
+
+  const displayValue = draft !== null ? draft : String(value)
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={toPersianDigits(displayValue)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={() => { typingRef.current = true }}
+      className={className}
+      dir="ltr"
+    />
+  )
+}
+
 export default function ControlPanel({
   status, params, onStart, onStop, onReset, onStep,
   onSetMode, onSetManualVoltage, onUpdateParams, onApplyDisturbance, onClearDisturbance, onSetSpeed,
@@ -154,16 +195,10 @@ export default function ControlPanel({
           </Slider.Track>
           <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
         </Slider.Root>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={toPersianDigits(String(value))}
-          onChange={(e) => {
-            const v = parseFloat(toWesternDigits(e.target.value))
-            if (!Number.isNaN(v)) setValue(v)
-          }}
+        <NumberInput
+          value={value}
+          onCommit={setValue}
           className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
-          dir="ltr"
         />
       </div>
     </div>
@@ -303,13 +338,10 @@ export default function ControlPanel({
                     <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
                   </Slider.Root>
                   <div className="flex items-center gap-0.5">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={toPersianDigits(String(val))}
-                      onChange={(e) => handleParamChange('simulation', p.key, toWesternDigits(e.target.value))}
+                    <NumberInput
+                      value={val}
+                      onCommit={(v) => handleParamChange('simulation', p.key, String(v))}
                       className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
-                      dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
                       <button
@@ -350,13 +382,10 @@ export default function ControlPanel({
                     <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
                   </Slider.Root>
                   <div className="flex items-center gap-0.5">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={toPersianDigits(String(val))}
-                      onChange={(e) => handleParamChange('control', p.key, toWesternDigits(e.target.value))}
+                    <NumberInput
+                      value={val}
+                      onCommit={(v) => handleParamChange('control', p.key, String(v))}
                       className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
-                      dir="ltr"
                     />
                     <div className="flex flex-col gap-px">
                       <button
