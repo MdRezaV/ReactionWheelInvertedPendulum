@@ -19,6 +19,8 @@ export function useSimulationSocket() {
   const [latest, setLatest] = useState(null)
   const [status, setStatus] = useState(null)
   const [params, setParams] = useState(null)
+  const [tuningProgress, setTuningProgress] = useState(null)
+  const [tuningResponse, setTuningResponse] = useState(null)
   const bufferRef = useRef([])
   const lastFullRef = useRef(null)
   const wsRef = useRef(null)
@@ -88,6 +90,18 @@ export function useSimulationSocket() {
     } else if (msg.t === 3) {
       const { t, ...rest } = msg
       setParams(rest)
+    } else if (msg.t === 4) {
+      setTuningProgress({
+        iteration: msg.iteration,
+        status: msg.status,
+        best: msg.best,
+        current: msg.current,
+      })
+    } else if (msg.t === 5) {
+      setTuningResponse({
+        time: msg.time,
+        theta: msg.theta,
+      })
     }
   }, [applyDelta, sampleToObject])
 
@@ -164,5 +178,5 @@ export function useSimulationSocket() {
 
   const getMetricsRef = useCallback(() => metricsRef, [])
 
-  return { connected, latest, status, params, send, getBuffer, clearBuffer, getMetricsRef }
+  return { connected, latest, status, params, tuningProgress, tuningResponse, send, getBuffer, clearBuffer, getMetricsRef }
 }

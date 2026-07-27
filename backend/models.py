@@ -31,6 +31,12 @@ class ControlMode(str, Enum):
     manual = "manual"
 
 
+class AutoTunerStatus(str, Enum):
+    idle = "idle"
+    running = "running"
+    complete = "complete"
+
+
 # ---------------------------------------------------------------------------
 # Simulation Parameters
 # ---------------------------------------------------------------------------
@@ -350,6 +356,17 @@ class WSSetSpeedCommand(WSCommandBase):
     multiplier: float = Field(default=1.0, ge=0.1, le=10.0)
 
 
+class WSAutoTunerStartCommand(WSCommandBase):
+    type: Literal["auto_tuner_start"] = "auto_tuner_start"
+    initial_angle: float = Field(
+        default=0.087, description="Initial pendulum angle for tuning [rad] (~5 deg)"
+    )
+
+
+class WSAutoTunerStopCommand(WSCommandBase):
+    type: Literal["auto_tuner_stop"] = "auto_tuner_stop"
+
+
 WSCommand = (
     WSStartCommand
     | WSStopCommand
@@ -364,4 +381,6 @@ WSCommand = (
     | WSSetManualVoltageCommand
     | WSDisturbanceCommand
     | WSSetSpeedCommand
+    | WSAutoTunerStartCommand
+    | WSAutoTunerStopCommand
 )

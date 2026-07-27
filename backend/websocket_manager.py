@@ -56,6 +56,8 @@ from models import (
     WSSetManualVoltageCommand,
     WSDisturbanceCommand,
     WSSetSpeedCommand,
+    WSAutoTunerStartCommand,
+    WSAutoTunerStopCommand,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,8 @@ _COMMAND_REGISTRY: dict[str, type[WSCommand]] = {
     "set_manual_voltage": WSSetManualVoltageCommand,
     "apply_disturbance": WSDisturbanceCommand,
     "set_speed": WSSetSpeedCommand,
+    "auto_tuner_start": WSAutoTunerStartCommand,
+    "auto_tuner_stop": WSAutoTunerStopCommand,
 }
 
 _VALID_COMMAND_TYPES: frozenset[str] = frozenset(_COMMAND_REGISTRY.keys())
@@ -518,6 +522,100 @@ class WebSocketManager:
             return
 
         payload = msgpack.packb({"t": 3, **params_dict}, use_bin_type=True)
+        stale: list[WebSocket] = []
+        for ws in self._active_connections:
+            try:
+                await ws.send_bytes(payload)
+            except Exception:
+                stale.append(ws)
+
+        for ws in stale:
+            self.disconnect(ws)
+
+    async def broadcast_tuning_progress(
+        self,
+        iteration: int,
+        status: str,
+        best_kp: float,
+        best_ki: float,
+        best_kd: float,
+        best_cost: float,
+        current_kp: float,
+        current_ki: float,
+        current_kd: float,
+        current_cost: float,
+    ) -> None:
+        """Push auto-tuner progress to all connected clients as binary msgpack.
+
+        Parameters
+        ----------
+        iteration : int
+            Current coordinate-descent iteration number.
+        status : str
+            Tuner status string (idle, running, complete).
+        best_kp, best_ki, best_kd : float
+            Best PID gains found so far.
+        best_cost : float
+            ITAE cost of the best gains.
+        current_kp, current_ki, current_kd : float
+            PID gains currently under evaluation.
+        current_cost : float
+            ITAE cost of the current evaluation.
+        """
+        if not self._active_connections:
+            return
+
+        payload = msgpack.packb(
+            {
+                "t": 4,
+                "iteration": iteration,
+                "status": status,
+                "best": {
+                    "kp": best_kp,
+                    "ki": best_ki,
+                    "kd": best_kd,
+                    "cost": best_cost,
+                },
+                "current": {
+                    "kp": current_kp,
+                    "ki": current_ki,
+                    "kd": current_kd,
+                    "cost": current_cost,
+                },
+            },
+            use_bin_type=True,
+        )
+        stale: list[WebSocket] = []
+        for ws in self._active_connections:
+            try:
+                await ws.send_bytes(payload)
+            except Exception:
+                stale.append(ws)
+
+        for ws in stale:
+            self.disconnect(ws)
+
+    async def broadcast_tuning_step_response(
+        self,
+        time: list[float],
+        theta: list[float],
+    ) -> None:
+        """Push the best-run step response to all connected clients as binary msgpack.
+
+        Parameters
+        ----------
+        time : list[float]
+            Decimated time samples [s].
+        theta : list[float]
+            Decimated pendulum angle samples [rad].
+        """
+        if not self._active_connections:
+            return
+
+        payload = msgpack.packb(
+            {"t": 5, "time": time, "theta": theta},
+            use_bin_type=True,
+        )
         stale: list[WebSocket] = []
         for ws in self._active_connections:
             try:

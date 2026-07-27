@@ -66,6 +66,7 @@ frontend/
 - Rolling telemetry buffer: 600 points max (`MAX_BUFFER_SIZE` in `useSimulationSocket`).
 - WebSocket reconnect: 2 s delay on close.
 - REST calls through `useSimulationApi` hook (thin `fetch` wrapper).
+- **All UI text in Persian (Farsi)**. All layouts RTL (`dir="rtl"`). No English labels in user-facing components. Use `toPersianDigits()` for numeric display.
 
 ### Testing
 - `pytest-asyncio` with `asyncio_mode = "auto"`.
@@ -85,6 +86,7 @@ frontend/
 - **Always** wrap angles to (-π, π] after integration steps.
 - **Always** use `model_copy()` (not `.copy()`) when duplicating Pydantic models.
 - **Always** validate new physical parameters via `_validate_physical_quantities()` before applying.
+- **Always** render all user-facing UI text in Persian (Farsi) with RTL layout (`dir="rtl"`). Use `toPersianDigits()` for all numeric display.
 - New controllers must subclass `Controller` ABC and implement `reset()` + `compute_torque()`.
 - New WS commands must be added to `_COMMAND_REGISTRY` in `websocket_manager.py` and the `WSCommand` union in `models.py`.
 - Backend serves React build from `frontend/dist` in production; do not add a separate static file server.

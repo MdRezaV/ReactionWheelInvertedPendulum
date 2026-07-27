@@ -14,6 +14,7 @@ import asyncio
 import logging
 from typing import Optional
 
+from auto_tuner import AutoTunerManager
 from config import DEFAULT_PHYSICS_RATE_HZ, DEFAULT_TELEMETRY_RATE_HZ
 from controller import ControllerManager
 from models import (
@@ -80,6 +81,14 @@ class SimulationManager:
         self._disturbance_voltage: float = 0.0
         self._disturbance_remaining: int = 0
 
+        # Auto-tuner
+        self._auto_tuner = AutoTunerManager(
+            ws_manager=self._ws_manager,
+            sim_params=sim_params,
+            ctrl_params=ctrl_params,
+            on_complete=self._on_tuning_complete,
+        )
+
         # Background task management
         self._task: Optional[asyncio.Task] = None
         self._shutdown_event: asyncio.Event = asyncio.Event()
@@ -125,6 +134,11 @@ class SimulationManager:
         """Current simulation speed multiplier."""
         return self._speed_multiplier
 
+    @property
+    def auto_tuner(self) -> AutoTunerManager:
+        """The auto-tuner manager for PID gain optimization."""
+        return self._auto_tuner
+
     # ------------------------------------------------------------------
     # Lifecycle hooks (called by FastAPI lifespan)
     # ------------------------------------------------------------------
@@ -156,6 +170,7 @@ class SimulationManager:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        await self._auto_tuner.stop()
         self._status = SimulationStatus.stopped
         logger.info("SimulationManager background loop stopped.")
 
@@ -379,6 +394,8 @@ class SimulationManager:
             WSSetManualVoltageCommand,
             WSDisturbanceCommand,
             WSSetSpeedCommand,
+            WSAutoTunerStartCommand,
+            WSAutoTunerStopCommand,
         )
 
         match command:
@@ -408,6 +425,13 @@ class SimulationManager:
                 self.apply_disturbance(voltage, duration_steps)
             case WSSetSpeedCommand(multiplier=multiplier):
                 self.set_speed_multiplier(multiplier)
+            case WSAutoTunerStartCommand(initial_angle=initial_angle):
+                self._auto_tuner.update_params(
+                    self._sim.params, self._ctrl_manager.control_params
+                )
+                await self._auto_tuner.start(initial_angle)
+            case WSAutoTunerStopCommand():
+                await self._auto_tuner.stop()
 
         return None
 
@@ -550,6 +574,20 @@ class SimulationManager:
                 f"Valid simulation params: {sorted(sim_fields)}. "
                 f"Valid control params: {sorted(ctrl_fields)}."
             )
+
+    async def _on_tuning_complete(self, kp: float, ki: float, kd: float) -> None:
+        """Callback invoked when auto-tuning completes with best gains.
+
+        Updates the live control parameters with the tuned gains and
+        broadcasts the new parameters to all connected clients.
+        """
+        current = self._ctrl_manager.control_params
+        updated = current.model_copy(update={"pid_kp": kp, "pid_ki": ki, "pid_kd": kd})
+        self.update_ctrl_params(updated)
+        await self._ws_manager.broadcast_params(self.get_params().model_dump())
+        logger.info(
+            "Auto-tuner applied best gains: kp=%.4f, ki=%.4f, kd=%.4f.", kp, ki, kd
+        )
 
     def _collect_warnings(self) -> None:
         """Refresh the non-fatal warnings list from subsystems."""
