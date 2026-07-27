@@ -37,8 +37,19 @@ _FALL_ANGLE: float = math.pi / 2.0
 _FALL_PENALTY: float = 1e4
 _MIN_GAIN: float = 0.0
 _MAX_GAIN: float = 1000.0
-_EFFORT_WEIGHT: float = 1e-4
+_EFFORT_WEIGHT: float = 1e-3
 _DEFAULT_INITIAL_ANGLE: float = math.radians(5.0)
+
+# Multi-scenario robustness: test gains across varied initial conditions
+_TEST_WHEEL_SPEED: float = 5.0
+_TEST_ANGLE_SCALE: float = 2.0
+
+# Oscillation and settling penalties
+_OSCILLATION_PENALTY: float = 5.0
+_UNSETTLED_ANGLE: float = 0.05
+_UNSETTLED_PENALTY: float = 50.0
+_WHEEL_SPEED_THRESHOLD: float = 10.0
+_WHEEL_SPEED_PENALTY: float = 50.0
 
 
 class AutoTunerManager:
@@ -169,13 +180,13 @@ class AutoTunerManager:
         try:
             await self._coordinate_descent()
             self._status = AutoTunerStatus.complete
-            if self._on_complete is not None and self._best_cost < _FALL_PENALTY:
+            if self._on_complete is not None:
                 await self._on_complete(self._best_kp, self._best_ki, self._best_kd)
-            elif self._best_cost >= _FALL_PENALTY:
-                logger.warning(
-                    "Auto-tuner could not find stable gains (best cost: %.6e).",
-                    self._best_cost,
-                )
+                if self._best_cost >= _FALL_PENALTY:
+                    logger.warning(
+                        "Auto-tuner applied best available gains, but system may still be unstable (best cost: %.6e).",
+                        self._best_cost,
+                    )
         except asyncio.CancelledError:
             self._status = AutoTunerStatus.idle
             raise
@@ -286,22 +297,45 @@ class AutoTunerManager:
     # Evaluation
     # ------------------------------------------------------------------
 
+    def _get_test_scenarios(self) -> list[tuple[float, float, float, float]]:
+        """Return initial conditions for multi-scenario robustness evaluation.
+
+        Scenarios test candidate gains across varied starting states to
+        ensure stability beyond a single nominal condition:
+
+        - Nominal: configured initial angle, zero wheel speed.
+        - Larger angle: ``_TEST_ANGLE_SCALE`` × initial angle (capped
+          below the fall threshold) to catch instability at bigger
+          perturbations.
+        - Non-zero wheel speed: nominal angle with an initial wheel
+          velocity to verify robustness against spinning start states.
+
+        Returns
+        -------
+        list[tuple[float, float, float, float]]
+            List of (initial_theta, initial_theta_dot, initial_phi,
+            initial_phi_dot).
+        """
+        angle = self._initial_angle
+        larger_angle = min(angle * _TEST_ANGLE_SCALE, _FALL_ANGLE * 0.8)
+        return [
+            (angle, 0.0, 0.0, 0.0),
+            (larger_angle, 0.0, 0.0, 0.0),
+            (angle, 0.0, 0.0, _TEST_WHEEL_SPEED),
+        ]
+
     async def _evaluate(
         self,
         kp: float,
         ki: float,
         kd: float,
     ) -> tuple[float, list[float], list[float]]:
-        """Evaluate PID gains via ITAE + effort cost over a 3-second simulation.
+        """Evaluate PID gains across multiple scenarios for robustness.
 
-        Creates local Simulation and PIDController instances, runs the
-        pendulum from the configured initial angle, and computes the
-        Integral of Time-weighted Absolute Error plus a weighted control
-        effort penalty. If the pendulum falls (angle exceeds pi/2) or
-        the simulation diverges, a finite fall penalty scaled by
-        remaining time is added.
-
-        Yields to the event loop every 100 steps to avoid blocking.
+        Runs the pendulum from several initial conditions (nominal angle,
+        larger angle, non-zero wheel speed) and sums the per-scenario
+        costs. The step-response data returned is from the primary
+        (nominal) scenario for visualization.
 
         Parameters
         ----------
@@ -315,14 +349,71 @@ class AutoTunerManager:
         Returns
         -------
         tuple[float, list[float], list[float]]
+            (total_cost, decimated_times, decimated_thetas from the
+            primary scenario).
+        """
+        scenarios = self._get_test_scenarios()
+        total_cost: float = 0.0
+        primary_times: list[float] = []
+        primary_thetas: list[float] = []
+
+        for idx, (init_theta, init_theta_dot, init_phi, init_phi_dot) in enumerate(scenarios):
+            cost, times, thetas = await self._evaluate_single(
+                kp, ki, kd,
+                init_theta, init_theta_dot, init_phi, init_phi_dot,
+            )
+            total_cost += cost
+            if idx == 0:
+                primary_times = times
+                primary_thetas = thetas
+
+        return total_cost, primary_times, primary_thetas
+
+    async def _evaluate_single(
+        self,
+        kp: float,
+        ki: float,
+        kd: float,
+        init_theta: float,
+        init_theta_dot: float,
+        init_phi: float,
+        init_phi_dot: float,
+    ) -> tuple[float, list[float], list[float]]:
+        """Evaluate PID gains for a single initial condition.
+
+        Computes ITAE + effort cost over a 3-second simulation, plus
+        penalties for oscillation (excess zero crossings of theta) and
+        unsettled end state (residual angle or wheel speed). One zero
+        crossing is allowed for free (the expected return to upright).
+
+        Parameters
+        ----------
+        kp : float
+            Proportional gain to evaluate.
+        ki : float
+            Integral gain to evaluate.
+        kd : float
+            Derivative gain to evaluate.
+        init_theta : float
+            Initial pendulum angle [rad].
+        init_theta_dot : float
+            Initial pendulum angular velocity [rad/s].
+        init_phi : float
+            Initial wheel angle [rad].
+        init_phi_dot : float
+            Initial wheel angular velocity [rad/s].
+
+        Returns
+        -------
+        tuple[float, list[float], list[float]]
             (cost, decimated_times, decimated_thetas).
         """
         sim_params = self._sim_params.model_copy(
             update={
-                "initial_theta": self._initial_angle,
-                "initial_theta_dot": 0.0,
-                "initial_phi": 0.0,
-                "initial_phi_dot": 0.0,
+                "initial_theta": init_theta,
+                "initial_theta_dot": init_theta_dot,
+                "initial_phi": init_phi,
+                "initial_phi_dot": init_phi_dot,
                 "initial_current": 0.0,
             }
         )
@@ -339,6 +430,8 @@ class AutoTunerManager:
         cost: float = 0.0
         times: list[float] = []
         thetas: list[float] = []
+        zero_crossings: int = 0
+        prev_theta: float = init_theta
 
         for step_idx in range(total_steps):
             state = sim.state_array
@@ -373,11 +466,25 @@ class AutoTunerManager:
             cost += t * abs(theta) * dt
             cost += _EFFORT_WEIGHT * (voltage ** 2) * dt
 
+            if prev_theta * theta < 0.0:
+                zero_crossings += 1
+            prev_theta = theta
+
             if step_idx % _DECIMATION_FACTOR == 0:
                 times.append(t)
                 thetas.append(theta)
 
             if step_idx % _YIELD_INTERVAL == 0:
                 await asyncio.sleep(0)
+
+        excess_crossings = max(0, zero_crossings - 1)
+        cost += _OSCILLATION_PENALTY * excess_crossings
+
+        final_theta = float(sim.state_array[0])
+        final_phi_dot = float(sim.state_array[3])
+        if abs(final_theta) > _UNSETTLED_ANGLE:
+            cost += _UNSETTLED_PENALTY
+        if abs(final_phi_dot) > _WHEEL_SPEED_THRESHOLD:
+            cost += _WHEEL_SPEED_PENALTY
 
         return cost, times, thetas
