@@ -163,6 +163,8 @@ export function useSimulationSocket() {
   const clearBuffer = useCallback(() => {
     bufferRef.current = []
     lastFullRef.current = null
+    latestObjRef.current = {}
+    setLatest(null)
   }, [])
 
   useEffect(() => {

@@ -158,6 +158,7 @@ class Simulation:
         self._last_current = 0.0
         self._last_theta_ddot = 0.0
         self._last_phi_ddot = 0.0
+        self._last_energy = 0.0
 
     def update_params(self, params: SimulationParameters) -> None:
         """Safely replace simulation parameters and recompute derived quantities.
