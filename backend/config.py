@@ -81,4 +81,5 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "swing_up_method": "energy",
     "pfl_kp": 5.0,
     "pfl_kd": 2.0,
+    "swing_up_max_wheel_speed": 50.0,
 }

@@ -49,6 +49,8 @@ class SwingUpMethod(str, Enum):
 class TuningTarget(str, Enum):
     pid = "pid"
     lqr = "lqr"
+    swing_up_pid = "swing_up_pid"
+    swing_up_lqr = "swing_up_lqr"
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +180,10 @@ class ControlParameters(BaseModel):
     swing_up_method: SwingUpMethod = Field(default=SwingUpMethod.energy, description="Swing-up algorithm")
     pfl_kp: float = Field(default=5.0, gt=0, description="PFL swing-up proportional gain")
     pfl_kd: float = Field(default=2.0, gt=0, description="PFL swing-up derivative gain")
+    swing_up_max_wheel_speed: float = Field(
+        default=50.0, gt=0,
+        description="Maximum allowed wheel angular speed during swing-up [rad/s]",
+    )
 
 
 # ---------------------------------------------------------------------------
