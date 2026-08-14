@@ -358,7 +358,7 @@ class LQRController(Controller):
             if not np.all(np.isfinite(K)):
                 raise ValueError(f"Non-finite LQR gains: {K}")
 
-            self._gain = K
+            self._gain = K.flatten()
             self._warning = None
 
         except Exception as exc:
