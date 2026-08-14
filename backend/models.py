@@ -46,6 +46,11 @@ class SwingUpMethod(str, Enum):
     pfl = "pfl"
 
 
+class TuningTarget(str, Enum):
+    pid = "pid"
+    lqr = "lqr"
+
+
 # ---------------------------------------------------------------------------
 # Simulation Parameters
 # ---------------------------------------------------------------------------
@@ -417,6 +422,9 @@ class WSAutoTunerStartCommand(WSCommandBase):
     type: Literal["auto_tuner_start"] = "auto_tuner_start"
     initial_angle: float = Field(
         default=0.087, description="Initial pendulum angle for tuning [rad] (~5 deg)"
+    )
+    target: TuningTarget = Field(
+        default=TuningTarget.pid, description="Controller to tune"
     )
 
 
