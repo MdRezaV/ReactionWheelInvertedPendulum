@@ -35,7 +35,6 @@ from config import (
 from models import (
     DEADBANDS,
     INT_TO_MODE,
-    MODE_TO_INT,
     TELEMETRY_FIELD_ORDER,
     ControlMode,
     ControlParameters,
@@ -232,7 +231,7 @@ class TelemetryBatcher:
 
     def add(self, telemetry: TelemetryMessage) -> None:
         """Add a telemetry sample to the current batch buffer."""
-        values = self._extract_values(telemetry)
+        values = telemetry.to_flat_values()
         self._buffer.append(values)
 
     def add_values(self, values: list[float]) -> None:
@@ -288,28 +287,7 @@ class TelemetryBatcher:
         self._batch_count = 0
         self._last_sent = None
 
-    def _extract_values(self, telemetry: TelemetryMessage) -> list[float]:
-        """Convert a TelemetryMessage to a flat list of floats in field order."""
-        mode_int = MODE_TO_INT.get(telemetry.mode.value, 0)
-        return [
-            telemetry.time,
-            telemetry.theta,
-            telemetry.theta_dot,
-            telemetry.theta_ddot,
-            telemetry.phi,
-            telemetry.phi_dot,
-            telemetry.phi_ddot,
-            telemetry.voltage,
-            telemetry.current,
-            telemetry.back_emf,
-            telemetry.motor_torque,
-            telemetry.wheel_torque,
-            telemetry.energy,
-            telemetry.kinetic_energy,
-            telemetry.potential_energy,
-            telemetry.angular_momentum,
-            float(mode_int),
-        ]
+
 
     def _compute_delta(self, sample: list[float]) -> list[list]:
         """Compute delta pairs [field_index, value] for fields exceeding deadband.
@@ -472,7 +450,7 @@ class WebSocketManager:
         if not self._active_connections:
             return
 
-        values = self._batcher._extract_values(telemetry)
+        values = telemetry.to_flat_values()
         payload = msgpack.packb(
             {"t": 0, "full": True, "fields": TELEMETRY_FIELD_ORDER, "data": [values]},
             use_bin_type=True,

@@ -231,20 +231,11 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
     _ws_manager.adapt_to_client_count()
     try:
         # Send an immediate binary snapshot so the client has initial state.
-        from models import TELEMETRY_FIELD_ORDER, MODE_TO_INT
+        from models import TELEMETRY_FIELD_ORDER
 
         telemetry = _sim_manager.last_telemetry
         if telemetry is not None:
-            mode_int = MODE_TO_INT.get(telemetry.mode.value, 0)
-            values = [
-                telemetry.time, telemetry.theta, telemetry.theta_dot,
-                telemetry.theta_ddot, telemetry.phi, telemetry.phi_dot,
-                telemetry.phi_ddot, telemetry.voltage, telemetry.current,
-                telemetry.back_emf, telemetry.motor_torque, telemetry.wheel_torque,
-                telemetry.energy, telemetry.kinetic_energy,
-                telemetry.potential_energy, telemetry.angular_momentum,
-                float(mode_int),
-            ]
+            values = telemetry.to_flat_values()
             snapshot = msgpack.packb(
                 {"t": 0, "full": True, "fields": TELEMETRY_FIELD_ORDER, "data": [values]},
                 use_bin_type=True,

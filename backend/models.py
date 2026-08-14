@@ -202,6 +202,19 @@ class TelemetryMessage(BaseModel):
     angular_momentum: float = 0.0
     mode: ControlMode
 
+    def to_flat_values(self) -> list[float]:
+        """Serialize to a flat list matching TELEMETRY_FIELD_ORDER."""
+        mode_int = MODE_TO_INT.get(self.mode.value, 0)
+        return [
+            self.time, self.theta, self.theta_dot, self.theta_ddot,
+            self.phi, self.phi_dot, self.phi_ddot,
+            self.voltage, self.current, self.back_emf,
+            self.motor_torque, self.wheel_torque,
+            self.energy, self.kinetic_energy,
+            self.potential_energy, self.angular_momentum,
+            float(mode_int),
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Binary telemetry encoding constants
