@@ -31,6 +31,7 @@ from models import (
     StatusEvent,
     StatusResponse,
     TelemetryMessage,
+    TuningTarget,
 )
 from simulation import Simulation
 from websocket_manager import WebSocketManager
@@ -446,11 +447,11 @@ class SimulationManager:
                 await self.apply_disturbance(config)
             case WSClearDisturbanceCommand(id=id):
                 await self.clear_disturbance(id)
-            case WSAutoTunerStartCommand(initial_angle=initial_angle):
+            case WSAutoTunerStartCommand(initial_angle=initial_angle, target=target):
                 self._auto_tuner.update_params(
                     self._sim.params, self._ctrl_manager.control_params
                 )
-                await self._auto_tuner.start(initial_angle)
+                await self._auto_tuner.start(initial_angle, target=target)
             case WSAutoTunerStopCommand():
                 await self._auto_tuner.stop()
 
@@ -628,18 +629,40 @@ class SimulationManager:
                 f"Valid control params: {sorted(ctrl_fields)}."
             )
 
-    async def _on_tuning_complete(self, kp: float, ki: float, kd: float) -> None:
+    async def _on_tuning_complete(self, target: TuningTarget, gains: dict[str, float]) -> None:
         """Callback invoked when auto-tuning completes with best gains.
 
         Updates the live control parameters with the tuned gains and
         broadcasts the new parameters to all connected clients.
+
+        Parameters
+        ----------
+        target : TuningTarget
+            Which controller was tuned (pid or lqr).
+        gains : dict[str, float]
+            Tuned gain values keyed by parameter name.
         """
         current = self._ctrl_manager.control_params
-        updated = current.model_copy(update={"pid_kp": kp, "pid_ki": ki, "pid_kd": kd})
+        if target == TuningTarget.pid:
+            updated = current.model_copy(update={
+                "pid_kp": gains["pid_kp"],
+                "pid_ki": gains["pid_ki"],
+                "pid_kd": gains["pid_kd"],
+            })
+        else:
+            updated = current.model_copy(update={
+                "lqr_q_theta": gains["lqr_q_theta"],
+                "lqr_q_theta_dot": gains["lqr_q_theta_dot"],
+                "lqr_q_phi_dot": gains["lqr_q_phi_dot"],
+                "lqr_q_current": gains["lqr_q_current"],
+                "lqr_r": gains["lqr_r"],
+            })
         self.update_ctrl_params(updated)
         await self._ws_manager.broadcast_params(self.get_params().model_dump())
         logger.info(
-            "Auto-tuner applied best gains: kp=%.4f, ki=%.4f, kd=%.4f.", kp, ki, kd
+            "Auto-tuner applied best gains for %s: %s.",
+            target.value,
+            ", ".join(f"{k}={v:.4f}" for k, v in gains.items()),
         )
 
     def _collect_warnings(self) -> None:
