@@ -626,6 +626,7 @@ class SwingUpBalanceController(Controller):
         self._ensure_derived(sim_params)
         max_voltage = sim_params.max_voltage
 
+        N = self._cached_N
         M11 = self._cached_M11
         M12 = self._cached_M12
         M22 = self._cached_M22
