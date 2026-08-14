@@ -17,8 +17,8 @@ import logging
 import math
 from typing import Awaitable, Callable, Optional
 
-from controller import PIDController
-from models import AutoTunerStatus, ControlParameters, SimulationParameters
+from controller import LQRController, PIDController
+from models import AutoTunerStatus, ControlParameters, SimulationParameters, TuningTarget
 from simulation import Simulation
 from websocket_manager import WebSocketManager
 
@@ -39,6 +39,12 @@ _MIN_GAIN: float = 0.0
 _MAX_GAIN: float = 1000.0
 _EFFORT_WEIGHT: float = 1e-3
 _DEFAULT_INITIAL_ANGLE: float = math.radians(5.0)
+
+# Parameter names searched per tuning target
+_PID_PARAM_NAMES: tuple[str, ...] = ("pid_kp", "pid_ki", "pid_kd")
+_LQR_PARAM_NAMES: tuple[str, ...] = (
+    "lqr_q_theta", "lqr_q_theta_dot", "lqr_q_phi_dot", "lqr_q_current", "lqr_r",
+)
 
 # Multi-scenario robustness: test gains across varied initial conditions
 _TEST_WHEEL_SPEED: float = 5.0
@@ -79,19 +85,21 @@ class AutoTunerManager:
         ws_manager: WebSocketManager,
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
-        on_complete: Optional[Callable[[float, float, float], Awaitable[None]]] = None,
+        on_complete: Optional[Callable[[TuningTarget, dict[str, float]], Awaitable[None]]] = None,
     ) -> None:
         self._ws_manager: WebSocketManager = ws_manager
         self._sim_params: SimulationParameters = sim_params.model_copy()
         self._ctrl_params: ControlParameters = ctrl_params.model_copy()
-        self._on_complete: Optional[Callable[[float, float, float], Awaitable[None]]] = on_complete
+        self._on_complete: Optional[Callable[[TuningTarget, dict[str, float]], Awaitable[None]]] = on_complete
         self._task: Optional[asyncio.Task[None]] = None
         self._status: AutoTunerStatus = AutoTunerStatus.idle
+        self._target: TuningTarget = TuningTarget.pid
         self._initial_angle: float = _DEFAULT_INITIAL_ANGLE
         self._iteration: int = 0
         self._best_kp: float = ctrl_params.pid_kp
         self._best_ki: float = ctrl_params.pid_ki
         self._best_kd: float = ctrl_params.pid_kd
+        self._best_gains: dict[str, float] = {}
         self._best_cost: float = float("inf")
 
     # ------------------------------------------------------------------
@@ -110,8 +118,13 @@ class AutoTunerManager:
 
     @property
     def best_gains(self) -> tuple[float, float, float]:
-        """Best (kp, ki, kd) found so far."""
+        """Best (kp, ki, kd) found so far (backward-compatible PID tuple)."""
         return (self._best_kp, self._best_ki, self._best_kd)
+
+    @property
+    def best_gains_dict(self) -> dict[str, float]:
+        """Best gains found so far as a parameter-name-keyed dict."""
+        return dict(self._best_gains)
 
     @property
     def best_cost(self) -> float:
@@ -139,21 +152,29 @@ class AutoTunerManager:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def start(self, initial_angle: float = _DEFAULT_INITIAL_ANGLE) -> None:
+    async def start(
+        self,
+        initial_angle: float = _DEFAULT_INITIAL_ANGLE,
+        target: TuningTarget = TuningTarget.pid,
+    ) -> None:
         """Start the background optimization task.
 
         Parameters
         ----------
         initial_angle : float
             Initial pendulum angle for each evaluation [rad].
+        target : TuningTarget
+            Which controller to tune (PID or LQR).
         """
         if self._status == AutoTunerStatus.running:
             logger.warning("Auto-tuner is already running; ignoring start request.")
             return
 
         self._initial_angle = initial_angle
+        self._target = target
         self._status = AutoTunerStatus.running
         self._iteration = 0
+        self._best_gains = self._initial_gains()
         self._best_kp = self._ctrl_params.pid_kp
         self._best_ki = self._ctrl_params.pid_ki
         self._best_kd = self._ctrl_params.pid_kd
@@ -172,6 +193,36 @@ class AutoTunerManager:
         self._status = AutoTunerStatus.idle
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _param_names(self) -> tuple[str, ...]:
+        """Return the parameter names being searched for the current target."""
+        match self._target:
+            case TuningTarget.lqr:
+                return _LQR_PARAM_NAMES
+            case _:
+                return _PID_PARAM_NAMES
+
+    def _initial_gains(self) -> dict[str, float]:
+        """Extract initial gain values from current ctrl_params for the target."""
+        match self._target:
+            case TuningTarget.lqr:
+                return {
+                    "lqr_q_theta": self._ctrl_params.lqr_q_theta,
+                    "lqr_q_theta_dot": self._ctrl_params.lqr_q_theta_dot,
+                    "lqr_q_phi_dot": self._ctrl_params.lqr_q_phi_dot,
+                    "lqr_q_current": self._ctrl_params.lqr_q_current,
+                    "lqr_r": self._ctrl_params.lqr_r,
+                }
+            case _:
+                return {
+                    "pid_kp": self._ctrl_params.pid_kp,
+                    "pid_ki": self._ctrl_params.pid_ki,
+                    "pid_kd": self._ctrl_params.pid_kd,
+                }
+
+    # ------------------------------------------------------------------
     # Internal task
     # ------------------------------------------------------------------
 
@@ -181,7 +232,7 @@ class AutoTunerManager:
             await self._coordinate_descent()
             self._status = AutoTunerStatus.complete
             if self._on_complete is not None:
-                await self._on_complete(self._best_kp, self._best_ki, self._best_kd)
+                await self._on_complete(self._target, dict(self._best_gains))
                 if self._best_cost >= _FALL_PENALTY:
                     logger.warning(
                         "Auto-tuner applied best available gains, but system may still be unstable (best cost: %.6e).",
@@ -195,20 +246,13 @@ class AutoTunerManager:
             self._status = AutoTunerStatus.idle
 
     async def _coordinate_descent(self) -> None:
-        """Run coordinate descent over kp, ki, kd."""
-        best_kp = self._best_kp
-        best_ki = self._best_ki
-        best_kd = self._best_kd
-        best_cost, best_times, best_thetas = await self._evaluate(
-            best_kp, best_ki, best_kd
-        )
+        """Run coordinate descent over the target's gain parameters."""
+        param_names = self._param_names()
+        best_gains = dict(self._best_gains)
+        best_cost, best_times, best_thetas = await self._evaluate(best_gains)
         self._best_cost = best_cost
 
-        await self._broadcast_progress(
-            0,
-            best_kp, best_ki, best_kd, best_cost,
-            best_kp, best_ki, best_kd, best_cost,
-        )
+        await self._broadcast_progress(0, best_gains, best_cost, best_gains, best_cost)
         if best_times:
             await self._ws_manager.broadcast_tuning_step_response(
                 best_times, best_thetas
@@ -218,30 +262,27 @@ class AutoTunerManager:
             self._iteration = iteration
             improved = False
 
-            for param_idx in range(3):
+            for param_idx in range(len(param_names)):
                 for factor in _STEP_FACTORS:
-                    trial = [best_kp, best_ki, best_kd]
-                    trial[param_idx] = max(_MIN_GAIN, trial[param_idx] * factor)
-                    if trial[param_idx] > _MAX_GAIN:
+                    trial = dict(best_gains)
+                    name = param_names[param_idx]
+                    trial[name] = max(_MIN_GAIN, trial[name] * factor)
+                    if trial[name] > _MAX_GAIN:
                         continue
-                    kp, ki, kd = trial
-                    cost, times, thetas = await self._evaluate(kp, ki, kd)
+                    cost, times, thetas = await self._evaluate(trial)
 
                     await self._broadcast_progress(
-                        iteration,
-                        best_kp, best_ki, best_kd, best_cost,
-                        kp, ki, kd, cost,
+                        iteration, best_gains, best_cost, trial, cost,
                     )
 
                     if cost < best_cost:
                         best_cost = cost
-                        best_kp, best_ki, best_kd = kp, ki, kd
+                        best_gains = dict(trial)
                         best_times, best_thetas = times, thetas
                         improved = True
-                        self._best_kp = best_kp
-                        self._best_ki = best_ki
-                        self._best_kd = best_kd
+                        self._best_gains = dict(best_gains)
                         self._best_cost = best_cost
+                        self._sync_backward_compat()
 
                         if best_times:
                             await self._ws_manager.broadcast_tuning_step_response(
@@ -258,38 +299,35 @@ class AutoTunerManager:
 
         self._status = AutoTunerStatus.complete
         await self._broadcast_progress(
-            self._iteration,
-            best_kp, best_ki, best_kd, best_cost,
-            best_kp, best_ki, best_kd, best_cost,
+            self._iteration, best_gains, best_cost, best_gains, best_cost,
         )
         if best_times:
             await self._ws_manager.broadcast_tuning_step_response(
                 best_times, best_thetas
             )
 
+    def _sync_backward_compat(self) -> None:
+        """Keep legacy _best_kp/ki/kd in sync when target is PID."""
+        if self._target == TuningTarget.pid:
+            self._best_kp = self._best_gains.get("pid_kp", self._best_kp)
+            self._best_ki = self._best_gains.get("pid_ki", self._best_ki)
+            self._best_kd = self._best_gains.get("pid_kd", self._best_kd)
+
     async def _broadcast_progress(
         self,
         iteration: int,
-        best_kp: float,
-        best_ki: float,
-        best_kd: float,
+        best_gains: dict[str, float],
         best_cost: float,
-        current_kp: float,
-        current_ki: float,
-        current_kd: float,
+        current_gains: dict[str, float],
         current_cost: float,
     ) -> None:
         """Helper to broadcast a tuning progress frame."""
         await self._ws_manager.broadcast_tuning_progress(
             iteration=iteration,
             status=self._status.value,
-            best_kp=best_kp,
-            best_ki=best_ki,
-            best_kd=best_kd,
+            best_gains=best_gains,
             best_cost=best_cost,
-            current_kp=current_kp,
-            current_ki=current_ki,
-            current_kd=current_kd,
+            current_gains=current_gains,
             current_cost=current_cost,
         )
 
@@ -326,11 +364,9 @@ class AutoTunerManager:
 
     async def _evaluate(
         self,
-        kp: float,
-        ki: float,
-        kd: float,
+        gains: dict[str, float],
     ) -> tuple[float, list[float], list[float]]:
-        """Evaluate PID gains across multiple scenarios for robustness.
+        """Evaluate candidate gains across multiple scenarios for robustness.
 
         Runs the pendulum from several initial conditions (nominal angle,
         larger angle, non-zero wheel speed) and sums the per-scenario
@@ -339,12 +375,8 @@ class AutoTunerManager:
 
         Parameters
         ----------
-        kp : float
-            Proportional gain to evaluate.
-        ki : float
-            Integral gain to evaluate.
-        kd : float
-            Derivative gain to evaluate.
+        gains : dict[str, float]
+            Candidate gain values keyed by parameter name.
 
         Returns
         -------
@@ -359,7 +391,7 @@ class AutoTunerManager:
 
         for idx, (init_theta, init_theta_dot, init_phi, init_phi_dot) in enumerate(scenarios):
             cost, times, thetas = await self._evaluate_single(
-                kp, ki, kd,
+                gains,
                 init_theta, init_theta_dot, init_phi, init_phi_dot,
             )
             total_cost += cost
@@ -371,15 +403,13 @@ class AutoTunerManager:
 
     async def _evaluate_single(
         self,
-        kp: float,
-        ki: float,
-        kd: float,
+        gains: dict[str, float],
         init_theta: float,
         init_theta_dot: float,
         init_phi: float,
         init_phi_dot: float,
     ) -> tuple[float, list[float], list[float]]:
-        """Evaluate PID gains for a single initial condition.
+        """Evaluate candidate gains for a single initial condition.
 
         Computes ITAE + effort cost over a 3-second simulation, plus
         penalties for oscillation (excess zero crossings of theta) and
@@ -388,12 +418,8 @@ class AutoTunerManager:
 
         Parameters
         ----------
-        kp : float
-            Proportional gain to evaluate.
-        ki : float
-            Integral gain to evaluate.
-        kd : float
-            Derivative gain to evaluate.
+        gains : dict[str, float]
+            Candidate gain values keyed by parameter name.
         init_theta : float
             Initial pendulum angle [rad].
         init_theta_dot : float
@@ -417,12 +443,15 @@ class AutoTunerManager:
                 "initial_current": 0.0,
             }
         )
-        ctrl_params = self._ctrl_params.model_copy(
-            update={"pid_kp": kp, "pid_ki": ki, "pid_kd": kd}
-        )
+        ctrl_params = self._ctrl_params.model_copy(update=gains)
 
         sim = Simulation(sim_params)
-        controller = PIDController()
+
+        match self._target:
+            case TuningTarget.lqr:
+                controller: PIDController | LQRController = LQRController()
+            case _:
+                controller = PIDController()
         controller.reset()
 
         dt = sim_params.time_step

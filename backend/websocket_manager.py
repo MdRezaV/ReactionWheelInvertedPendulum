@@ -516,13 +516,9 @@ class WebSocketManager:
         self,
         iteration: int,
         status: str,
-        best_kp: float,
-        best_ki: float,
-        best_kd: float,
+        best_gains: dict[str, float],
         best_cost: float,
-        current_kp: float,
-        current_ki: float,
-        current_kd: float,
+        current_gains: dict[str, float],
         current_cost: float,
     ) -> None:
         """Push auto-tuner progress to all connected clients as binary msgpack.
@@ -533,12 +529,12 @@ class WebSocketManager:
             Current coordinate-descent iteration number.
         status : str
             Tuner status string (idle, running, complete).
-        best_kp, best_ki, best_kd : float
-            Best PID gains found so far.
+        best_gains : dict[str, float]
+            Best gains found so far (keys depend on tuning target).
         best_cost : float
             ITAE cost of the best gains.
-        current_kp, current_ki, current_kd : float
-            PID gains currently under evaluation.
+        current_gains : dict[str, float]
+            Gains currently under evaluation.
         current_cost : float
             ITAE cost of the current evaluation.
         """
@@ -550,18 +546,8 @@ class WebSocketManager:
                 "t": 4,
                 "iteration": iteration,
                 "status": status,
-                "best": {
-                    "kp": best_kp,
-                    "ki": best_ki,
-                    "kd": best_kd,
-                    "cost": best_cost,
-                },
-                "current": {
-                    "kp": current_kp,
-                    "ki": current_ki,
-                    "kd": current_kd,
-                    "cost": current_cost,
-                },
+                "best": {**best_gains, "cost": best_cost},
+                "current": {**current_gains, "cost": current_cost},
             },
             use_bin_type=True,
         )
