@@ -25,6 +25,7 @@ from models import (
     DisturbanceChannel,
     DisturbanceConfig,
     DisturbanceWaveform,
+    MODE_TO_INT,
     ParamsResponse,
     SimulationParameters,
     SimulationStatus,
@@ -32,6 +33,22 @@ from models import (
     StatusResponse,
     TelemetryMessage,
     TuningTarget,
+    WSAutoTunerStartCommand,
+    WSAutoTunerStopCommand,
+    WSClearDisturbanceCommand,
+    WSPauseCommand,
+    WSResetCommand,
+    WSResumeCommand,
+    WSSetControlModeCommand,
+    WSSetControlParamsCommand,
+    WSSetDisturbanceCommand,
+    WSSetManualVoltageCommand,
+    WSSetParamCommand,
+    WSSetSimulationParamsCommand,
+    WSSetSpeedCommand,
+    WSStartCommand,
+    WSStepCommand,
+    WSStopCommand,
 )
 from simulation import Simulation
 from websocket_manager import WebSocketManager
@@ -399,25 +416,6 @@ class SimulationManager:
             A telemetry snapshot if the command produced one (e.g. step),
             otherwise None.
         """
-        from models import (
-            WSStartCommand,
-            WSStopCommand,
-            WSPauseCommand,
-            WSResumeCommand,
-            WSResetCommand,
-            WSStepCommand,
-            WSSetParamCommand,
-            WSSetSimulationParamsCommand,
-            WSSetControlParamsCommand,
-            WSSetControlModeCommand,
-            WSSetManualVoltageCommand,
-            WSSetSpeedCommand,
-            WSSetDisturbanceCommand,
-            WSClearDisturbanceCommand,
-            WSAutoTunerStartCommand,
-            WSAutoTunerStopCommand,
-        )
-
         match command:
             case WSStartCommand():
                 await self.start()
@@ -499,7 +497,6 @@ class SimulationManager:
                         should_send = False
 
                     if should_send and self._ws_manager.has_clients:
-                        from models import MODE_TO_INT
                         mode_int = MODE_TO_INT.get(self._ctrl_manager.mode.value, 0)
                         values = self._sim.get_telemetry_values(mode_int)
                         self._ws_manager.add_telemetry_values(values)
