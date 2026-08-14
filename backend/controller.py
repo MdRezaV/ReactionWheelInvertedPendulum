@@ -574,8 +574,7 @@ class SwingUpBalanceController(Controller):
         # apply wheel damping instead of further pumping to prevent continuous rotation.
         e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
         if e_pendulum > 0.0:
-            v_damping = -0.5 * R * (Kt / Kt) * phi_dot  # simplified: oppose wheel motion
-            v_damping = -Ke * N * phi_dot  # back-EMF braking
+            v_damping = -Ke * N * phi_dot
             return self._clamp_voltage(v_damping, max_voltage)
 
         # Desired pendulum angular acceleration
@@ -639,7 +638,11 @@ class SwingUpBalanceController(Controller):
             else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
         )
         ke = 0.5 * I_p * theta_dot ** 2
-        pe = sim_params.pendulum_mass * sim_params.gravity * l_com * (math.cos(theta) - 1.0)
+        pe = (
+            (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
+            * sim_params.gravity
+            * (math.cos(theta) - 1.0)
+        )
         return ke + pe
 
     def _compute_energy_voltage(
