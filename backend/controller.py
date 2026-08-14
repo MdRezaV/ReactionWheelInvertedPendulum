@@ -21,7 +21,7 @@ from typing import Optional
 import numpy as np
 from scipy.linalg import solve_continuous_are
 
-from models import ControlMode, ControlParameters, SimulationParameters
+from models import ControlMode, ControlParameters, SimulationParameters, SwingUpMethod
 
 import logging
 
@@ -418,22 +418,24 @@ class LQRController(Controller):
 # ---------------------------------------------------------------------------
 
 
-class EnergySwingUpController(Controller):
-    """Energy-based swing-up with LQR/PID balance near upright.
+class SwingUpBalanceController(Controller):
+    """Generalized swing-up controller with configurable balance handoff.
 
-    Away from upright, commands voltage to pump mechanical energy toward
-    the upright energy level (E_target = 0). The control law is:
+    Supports two swing-up methods selected at runtime via
+    ``ctrl_params.swing_up_method``:
 
-        V = gain * (E_target - E) * phi_dot
+    * **energy** – Energy-based pumping: V = gain * (E_target - E) * phi_dot,
+      with phase-based excitation when wheel speed is too low.
+    * **pfl** – Partial Feedback Linearization: shapes theta_ddot via
+      feedback linearization of the coupled dynamics, then maps the
+      required wheel acceleration to a voltage command.
 
-    which ensures motor power (V * i_a) drives energy toward the target
-    when the wheel is spinning.
+    The ``balance_mode`` constructor argument determines the handoff
+    behaviour near upright:
 
-    When |phi_dot| is too small to transfer meaningful power, a bounded
-    phase-based excitation voltage is added to spin the wheel.
-
-    Near upright (within configurable angle and velocity thresholds),
-    the controller switches to LQR (preferred) or PID for fine balance.
+    * ``"lqr"`` – switch to LQRController within angle/velocity thresholds.
+    * ``"pid"`` – switch to PIDController within angle/velocity thresholds.
+    * ``None``  – pure swing-up; never switch to a balance controller.
     """
 
     # Minimum |phi_dot| below which excitation is applied [rad/s]
@@ -441,19 +443,35 @@ class EnergySwingUpController(Controller):
     # Maximum excitation voltage as fraction of max_voltage
     _EXCITATION_FRACTION: float = 0.3
 
-    def __init__(self) -> None:
-        self._lqr: LQRController = LQRController()
-        self._pid: PIDController = PIDController()
+    def __init__(self, balance_mode: Optional[str] = None) -> None:
+        """Initialize the swing-up/balance controller.
+
+        Parameters
+        ----------
+        balance_mode : str or None
+            ``"lqr"``, ``"pid"``, or ``None`` for pure swing-up.
+        """
+        self._balance_mode: Optional[str] = balance_mode
+        self._lqr: Optional[LQRController] = (
+            LQRController() if balance_mode == "lqr" else None
+        )
+        self._pid: Optional[PIDController] = (
+            PIDController() if balance_mode == "pid" else None
+        )
 
     def reset(self) -> None:
-        """Reset internal LQR and PID controllers."""
-        self._lqr.reset()
-        self._pid.reset()
+        """Reset internal balance controllers."""
+        if self._lqr is not None:
+            self._lqr.reset()
+        if self._pid is not None:
+            self._pid.reset()
 
     @property
     def lqr_warning(self) -> Optional[str]:
         """Expose LQR warning if swing-up falls back to PID near upright."""
-        return self._lqr.warning
+        if self._lqr is not None:
+            return self._lqr.warning
+        return None
 
     def _is_near_upright(
         self,
@@ -467,27 +485,140 @@ class EnergySwingUpController(Controller):
             and abs(theta_dot) < ctrl_params.upright_velocity_threshold
         )
 
-    def compute_voltage(
+    # ------------------------------------------------------------------
+    # PFL swing-up helper
+    # ------------------------------------------------------------------
+
+    def _compute_pfl_voltage(
         self,
         theta: float,
         theta_dot: float,
         phi_dot: float,
-        current: float,
-        energy: float,
-        time: float,
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> float:
+        """Compute voltage via Partial Feedback Linearization.
+
+        Desired angular acceleration:
+            theta_ddot_des = -pfl_kp * sin(theta) - pfl_kd * theta_dot
+
+        From the coupled dynamics M11*theta_ddot + M12*phi_ddot = gravity_term,
+        solve for the required phi_ddot, then convert to voltage using a
+        quasi-static motor model: V ≈ R * (tau_m / Kt) + Ke * N * phi_dot.
+
+        Parameters
+        ----------
+        theta : float
+            Pendulum angle from upright [rad].
+        theta_dot : float
+            Pendulum angular velocity [rad/s].
+        phi_dot : float
+            Relative wheel angular velocity [rad/s].
+        sim_params : SimulationParameters
+            Physical simulation parameters.
+        ctrl_params : ControlParameters
+            Control gains including pfl_kp, pfl_kd.
+
+        Returns
+        -------
+        float
+            Voltage command [V], clamped to [-max_voltage, max_voltage].
+        """
         max_voltage = sim_params.max_voltage
 
-        # Near upright: switch to balance controller.
-        # LQR handles its own PID fallback internally if gain is unavailable.
-        if self._is_near_upright(theta, theta_dot, ctrl_params):
-            return self._lqr.compute_voltage(
-                theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
+        # Effective physical quantities (mirror simulation.py logic)
+        l_com = (
+            sim_params.pendulum_com_length
+            if sim_params.pendulum_com_length is not None
+            else sim_params.pendulum_length / 2.0
+        )
+        I_p = (
+            sim_params.pendulum_inertia
+            if sim_params.pendulum_inertia is not None
+            else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
+        )
+        I_w = (
+            sim_params.wheel_inertia
+            if sim_params.wheel_inertia is not None
+            else 0.5 * sim_params.wheel_mass * (
+                sim_params.wheel_outer_radius ** 2 + sim_params.wheel_inner_radius ** 2
             )
+        )
 
-        # Energy swing-up region
+        N = sim_params.gear_ratio
+        I_w_eff = I_w + sim_params.motor_rotor_inertia * N ** 2
+
+        M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w_eff
+        M12 = I_w_eff
+        M22 = I_w_eff
+
+        gravity_coeff = (
+            (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
+            * sim_params.gravity
+        )
+
+        Kt = sim_params.motor_constant
+        Ke = sim_params.motor_constant
+        R = sim_params.motor_resistance
+
+        # Desired pendulum angular acceleration
+        theta_ddot_des = (
+            -ctrl_params.pfl_kp * math.sin(theta)
+            - ctrl_params.pfl_kd * theta_dot
+        )
+
+        # Required wheel acceleration from coupled dynamics:
+        # M11*theta_ddot + M12*phi_ddot = gravity_coeff * sin(theta)
+        # => phi_ddot = (gravity_coeff*sin(theta) - M11*theta_ddot_des) / M12
+        if abs(M12) < 1e-12:
+            return 0.0
+        phi_ddot_req = (gravity_coeff * math.sin(theta) - M11 * theta_ddot_des) / M12
+
+        # Required motor torque from the wheel equation:
+        # M12*theta_ddot + M22*phi_ddot = N * Kt * i_a
+        # => tau_m = Kt * i_a = (M12*theta_ddot_des + M22*phi_ddot_req) / N
+        tau_m = (M12 * theta_ddot_des + M22 * phi_ddot_req) / N
+
+        # Quasi-static voltage: V = R * i_a + Ke * N * phi_dot
+        # where i_a = tau_m / Kt
+        voltage = R * (tau_m / Kt) + Ke * N * phi_dot
+
+        return self._clamp_voltage(voltage, max_voltage)
+
+    # ------------------------------------------------------------------
+    # Energy-based swing-up helper
+    # ------------------------------------------------------------------
+
+    def _compute_energy_voltage(
+        self,
+        theta: float,
+        phi_dot: float,
+        energy: float,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+    ) -> float:
+        """Compute voltage via energy-based swing-up.
+
+        Parameters
+        ----------
+        theta : float
+            Pendulum angle from upright [rad].
+        phi_dot : float
+            Relative wheel angular velocity [rad/s].
+        energy : float
+            Total mechanical energy (upright-referenced) [J].
+        sim_params : SimulationParameters
+            Physical simulation parameters.
+        ctrl_params : ControlParameters
+            Control gains.
+
+        Returns
+        -------
+        float
+            Voltage command [V], clamped to [-max_voltage, max_voltage].
+        """
+        max_voltage = sim_params.max_voltage
+
         # Target energy at upright rest = 0 (by convention in simulation.py)
         e_target = 0.0
         e_error = e_target - energy  # positive when below target
@@ -499,17 +630,79 @@ class EnergySwingUpController(Controller):
 
         # Phase-based excitation when wheel speed is too low
         if abs(phi_dot) < self._PHI_DOT_EXCITATION_THRESHOLD:
-            # Use pendulum angle to determine excitation direction.
-            # sin(theta) > 0 means pendulum is on the positive side;
-            # excite the wheel to build angular momentum in a direction
-            # that will pump energy on the next swing.
             excitation_amplitude = self._EXCITATION_FRACTION * max_voltage
-            # Direction: push wheel to create reaction that aids swing-up
             excitation_dir = math.copysign(1.0, math.sin(theta)) if abs(math.sin(theta)) > 1e-6 else 1.0
             v_excitation = excitation_amplitude * excitation_dir
             v_energy += v_excitation
 
         return self._clamp_voltage(v_energy, max_voltage)
+
+    # ------------------------------------------------------------------
+    # Main control law
+    # ------------------------------------------------------------------
+
+    def compute_voltage(
+        self,
+        theta: float,
+        theta_dot: float,
+        phi_dot: float,
+        current: float,
+        energy: float,
+        time: float,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+    ) -> float:
+        """Compute the motor voltage command for swing-up (and balance if configured).
+
+        Parameters
+        ----------
+        theta : float
+            Pendulum angle from upright [rad].
+        theta_dot : float
+            Pendulum angular velocity [rad/s].
+        phi_dot : float
+            Relative wheel angular velocity [rad/s].
+        current : float
+            Armature current [A].
+        energy : float
+            Total mechanical energy (upright-referenced) [J].
+        time : float
+            Current simulation time [s].
+        sim_params : SimulationParameters
+            Physical simulation parameters.
+        ctrl_params : ControlParameters
+            Tunable control gains and thresholds.
+
+        Returns
+        -------
+        float
+            Voltage command [V], clamped to [-max_voltage, max_voltage].
+        """
+        # Near upright: switch to balance controller if configured.
+        if self._balance_mode is not None and self._is_near_upright(theta, theta_dot, ctrl_params):
+            if self._balance_mode == "lqr" and self._lqr is not None:
+                return self._lqr.compute_voltage(
+                    theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
+                )
+            if self._balance_mode == "pid" and self._pid is not None:
+                return self._pid.compute_voltage(
+                    theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
+                )
+
+        # Swing-up region: dispatch on method
+        match ctrl_params.swing_up_method:
+            case SwingUpMethod.pfl:
+                return self._compute_pfl_voltage(
+                    theta, theta_dot, phi_dot, sim_params, ctrl_params
+                )
+            case _:
+                return self._compute_energy_voltage(
+                    theta, phi_dot, energy, sim_params, ctrl_params
+                )
+
+
+# Backward-compatible alias
+EnergySwingUpController = SwingUpBalanceController
 
 
 # ---------------------------------------------------------------------------
@@ -596,7 +789,9 @@ class ControllerManager:
         self._manual_controller: ManualController = ManualController()
         self._pid_controller: PIDController = PIDController()
         self._lqr_controller: LQRController = LQRController()
-        self._energy_controller: EnergySwingUpController = EnergySwingUpController()
+        self._swing_up_controller: SwingUpBalanceController = SwingUpBalanceController(balance_mode=None)
+        self._swing_up_lqr_controller: SwingUpBalanceController = SwingUpBalanceController(balance_mode="lqr")
+        self._swing_up_pid_controller: SwingUpBalanceController = SwingUpBalanceController(balance_mode="pid")
         self._smc_controller: SlidingModeController = SlidingModeController()
 
     # ------------------------------------------------------------------
@@ -616,7 +811,10 @@ class ControllerManager:
     @property
     def lqr_warning(self) -> Optional[str]:
         """Warning from LQR controller if gain computation failed."""
-        return self._lqr_controller.warning
+        warning = self._lqr_controller.warning
+        if warning is None:
+            warning = self._swing_up_lqr_controller.lqr_warning
+        return warning
 
     # ------------------------------------------------------------------
     # Mode and parameter management
@@ -655,7 +853,9 @@ class ControllerManager:
         self._manual_controller.reset()
         self._pid_controller.reset()
         self._lqr_controller.reset()
-        self._energy_controller.reset()
+        self._swing_up_controller.reset()
+        self._swing_up_lqr_controller.reset()
+        self._swing_up_pid_controller.reset()
         self._smc_controller.reset()
         self._manual_voltage = 0.0
 
@@ -720,7 +920,13 @@ class ControllerManager:
             case ControlMode.lqr:
                 return self._lqr_controller
             case ControlMode.energy_swing_up:
-                return self._energy_controller
+                return self._swing_up_controller
+            case ControlMode.swing_up:
+                return self._swing_up_controller
+            case ControlMode.swing_up_lqr:
+                return self._swing_up_lqr_controller
+            case ControlMode.swing_up_pid:
+                return self._swing_up_pid_controller
             case ControlMode.sliding_mode:
                 return self._smc_controller
             case _:
