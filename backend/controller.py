@@ -642,9 +642,18 @@ class SwingUpBalanceController(Controller):
             v_damping = -Ke * N * phi_dot
             return self._clamp_voltage(v_damping, max_voltage)
 
+        # Near the downward equilibrium (|theta| ≈ π), sin(theta) ≈ 0 creates
+        # a control singularity where the PFL law produces zero voltage.
+        # Inject a small excitation to break the deadlock.
+        sin_theta = math.sin(theta)
+        if abs(sin_theta) < 0.05 and abs(theta) > math.pi * 0.5 and abs(theta_dot) < 0.5:
+            excitation_dir = math.copysign(1.0, theta) if abs(theta) > 1e-6 else 1.0
+            v_exc = excitation_dir * self._EXCITATION_FRACTION * max_voltage
+            return self._clamp_voltage(v_exc, max_voltage)
+
         # Desired pendulum angular acceleration
         theta_ddot_des = (
-            -ctrl_params.pfl_kp * math.sin(theta)
+            -ctrl_params.pfl_kp * sin_theta
             - ctrl_params.pfl_kd * theta_dot
         )
 
