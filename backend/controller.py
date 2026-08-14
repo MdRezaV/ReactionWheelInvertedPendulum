@@ -82,7 +82,7 @@ class Controller(abc.ABC):
     @staticmethod
     def _clamp_voltage(voltage: float, max_voltage: float) -> float:
         """Clamp voltage to actuator limits."""
-        return float(np.clip(voltage, -max_voltage, max_voltage))
+        return max(-max_voltage, min(max_voltage, voltage))
 
 
 # ---------------------------------------------------------------------------

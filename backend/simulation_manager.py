@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import random
 from typing import Optional
-
-import numpy as np
 
 from auto_tuner import AutoTunerManager
 from config import DEFAULT_PHYSICS_RATE_HZ, DEFAULT_TELEMETRY_RATE_HZ
@@ -552,14 +552,14 @@ class SimulationManager:
             if wf == DisturbanceWaveform.constant:
                 val = config.amplitude
             elif wf == DisturbanceWaveform.sinusoidal:
-                val = config.amplitude * np.sin(2.0 * np.pi * config.frequency * t)
+                val = config.amplitude * math.sin(2.0 * math.pi * config.frequency * t)
             elif wf == DisturbanceWaveform.pulse:
                 phase = (t * config.frequency) % 1.0
                 val = config.amplitude if phase < config.duty_cycle else 0.0
             elif wf == DisturbanceWaveform.sawtooth:
                 val = config.amplitude * (2.0 * ((t * config.frequency) % 1.0) - 1.0)
             elif wf == DisturbanceWaveform.gaussian_noise:
-                val = np.random.normal(config.mean, config.std)
+                val = random.gauss(config.mean, config.std)
                 
             if config.channel == DisturbanceChannel.voltage:
                 total_dist_voltage += val

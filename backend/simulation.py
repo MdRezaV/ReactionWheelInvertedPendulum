@@ -17,6 +17,8 @@ State vector: [theta, theta_dot, phi, phi_dot, i_a]
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from models import ControlMode, SimulationParameters, TelemetryMessage
@@ -26,7 +28,7 @@ _DEAD_ZONE: float = 1e-8
 
 def _wrap_angle(angle: float) -> float:
     """Wrap an angle into the range (-pi, pi]."""
-    return float((angle + np.pi) % (2.0 * np.pi) - np.pi)
+    return float((angle + math.pi) % (2.0 * math.pi) - math.pi)
 
 
 class Simulation:
@@ -223,7 +225,7 @@ class Simulation:
             + 2.0 * self._M12 * s[1] * phi_dot
             + self._M22 * phi_dot ** 2
         )
-        pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
+        pe = self._gravity_coeff * (math.cos(s[0]) - 1.0)
         return [
             self._time,
             float(s[0]),
@@ -293,7 +295,7 @@ class Simulation:
         )
 
         # PE referenced to upright: V = gravity_coeff * (cos(theta) - 1)
-        pe = self._gravity_coeff * (np.cos(theta) - 1.0)
+        pe = self._gravity_coeff * (math.cos(theta) - 1.0)
 
         return float(ke), float(pe)
 
@@ -328,7 +330,8 @@ class Simulation:
         i_a = state[4]
 
         # Saturate voltage
-        v = float(np.clip(voltage, -self._params.max_voltage, self._params.max_voltage))
+        max_v = self._params.max_voltage
+        v = max(-max_v, min(max_v, voltage))
 
         # Electromagnetic torque transmitted through gearbox to wheel side
         torque_wheel = self._N * self._Kt * i_a
@@ -336,7 +339,7 @@ class Simulation:
         # Right-hand side of M @ [theta_ddot, phi_ddot]^T = f
         # Pendulum equation: gravity - reaction torque - pivot damping + external
         f1 = (
-            self._gravity_coeff * np.sin(theta)
+            self._gravity_coeff * math.sin(theta)
             - torque_wheel
             - self._params.damping * theta_dot
             + external_torque
@@ -374,11 +377,12 @@ class Simulation:
         phi_dot = state[3]
         i_a = state[4]
 
-        v = float(np.clip(voltage, -self._params.max_voltage, self._params.max_voltage))
+        max_v = self._params.max_voltage
+        v = max(-max_v, min(max_v, voltage))
         torque_wheel = self._N * self._Kt * i_a
 
         f1 = (
-            self._gravity_coeff * np.sin(theta)
+            self._gravity_coeff * math.sin(theta)
             - torque_wheel
             - self._params.damping * theta_dot
             + external_torque
@@ -481,7 +485,7 @@ class Simulation:
             + 2.0 * self._M12 * s[1] * s[3]
             + self._M22 * s[3] ** 2
         )
-        pe = self._gravity_coeff * (np.cos(s[0]) - 1.0)
+        pe = self._gravity_coeff * (math.cos(s[0]) - 1.0)
         self._last_energy = float(ke + pe)
 
         # Normalize angles
