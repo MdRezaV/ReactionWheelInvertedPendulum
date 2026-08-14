@@ -429,3 +429,7 @@ WSCommand = (
     | WSAutoTunerStartCommand
     | WSAutoTunerStopCommand
 )
+
+# Resolve forward references to DisturbanceConfig (defined after StatusResponse/StatusEvent).
+StatusResponse.model_rebuild()
+StatusEvent.model_rebuild()
