@@ -97,6 +97,7 @@ export function useSimulationSocket() {
         status: msg.status,
         best: msg.best,
         current: msg.current,
+        target: msg.target,
       })
     } else if (msg.t === 5) {
       setTuningResponse({
