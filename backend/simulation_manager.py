@@ -633,36 +633,34 @@ class SimulationManager:
         """Callback invoked when auto-tuning completes with best gains.
 
         Updates the live control parameters with the tuned gains and
-        broadcasts the new parameters to all connected clients.
+        broadcasts the new parameters to all connected clients. The gains
+        dictionary is filtered to fields that exist on ControlParameters,
+        so any tuning target (PID, LQR, swing-up variants) is applied
+        generically.
 
         Parameters
         ----------
         target : TuningTarget
-            Which controller was tuned (pid or lqr).
+            Which controller was tuned.
         gains : dict[str, float]
             Tuned gain values keyed by parameter name.
         """
+        ctrl_fields = set(ControlParameters.model_fields.keys())
+        update = {k: v for k, v in gains.items() if k in ctrl_fields}
+        if not update:
+            logger.warning(
+                "Auto-tuner produced no applicable gains for target '%s'.",
+                target.value,
+            )
+            return
         current = self._ctrl_manager.control_params
-        if target == TuningTarget.pid:
-            updated = current.model_copy(update={
-                "pid_kp": gains["pid_kp"],
-                "pid_ki": gains["pid_ki"],
-                "pid_kd": gains["pid_kd"],
-            })
-        else:
-            updated = current.model_copy(update={
-                "lqr_q_theta": gains["lqr_q_theta"],
-                "lqr_q_theta_dot": gains["lqr_q_theta_dot"],
-                "lqr_q_phi_dot": gains["lqr_q_phi_dot"],
-                "lqr_q_current": gains["lqr_q_current"],
-                "lqr_r": gains["lqr_r"],
-            })
+        updated = current.model_copy(update=update)
         self.update_ctrl_params(updated)
         await self._ws_manager.broadcast_params(self.get_params().model_dump())
         logger.info(
             "Auto-tuner applied best gains for %s: %s.",
             target.value,
-            ", ".join(f"{k}={v:.4f}" for k, v in gains.items()),
+            ", ".join(f"{k}={v:.4f}" for k, v in update.items()),
         )
 
     def _collect_warnings(self) -> None:

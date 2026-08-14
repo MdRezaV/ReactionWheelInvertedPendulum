@@ -17,8 +17,14 @@ import logging
 import math
 from typing import Awaitable, Callable, Optional
 
-from controller import LQRController, PIDController
-from models import AutoTunerStatus, ControlParameters, SimulationParameters, TuningTarget
+from controller import LQRController, PIDController, SwingUpBalanceController
+from models import (
+    AutoTunerStatus,
+    ControlParameters,
+    SimulationParameters,
+    SwingUpMethod,
+    TuningTarget,
+)
 from simulation import Simulation
 from websocket_manager import WebSocketManager
 
@@ -42,11 +48,39 @@ _MAX_GAIN_LQR: float = 50000.0
 _EFFORT_WEIGHT: float = 1e-3
 _DEFAULT_INITIAL_ANGLE: float = math.radians(5.0)
 
+# Swing-up tuning constants
+_SWING_UP_TUNING_DURATION_S: float = 8.0
+_SWING_UP_INITIAL_ANGLE: float = math.pi - 0.05
+_SWING_UP_SUCCESS_ANGLE: float = 0.1
+_SWING_UP_SUCCESS_VELOCITY: float = 0.5
+_SWING_UP_SUCCESS_HOLD_S: float = 0.3
+_SWING_UP_TIME_WEIGHT: float = 5.0
+_SWING_UP_SHAPING_WEIGHT: float = 50.0
+_SWING_UP_WHEEL_SPEED_PENALTY: float = 2.0
+
 # Parameter names searched per tuning target
 _PID_PARAM_NAMES: tuple[str, ...] = ("pid_kp", "pid_ki", "pid_kd")
 _LQR_PARAM_NAMES: tuple[str, ...] = (
     "lqr_q_theta", "lqr_q_theta_dot", "lqr_q_phi_dot", "lqr_q_current", "lqr_r",
 )
+
+# Per-parameter search bounds for swing-up tuning targets
+_SWING_UP_PARAM_BOUNDS: dict[str, tuple[float, float]] = {
+    "swing_up_max_wheel_speed": (5.0, 200.0),
+    "upright_angle_threshold": (0.05, 0.5),
+    "upright_velocity_threshold": (0.2, 3.0),
+    "energy_swing_up_gain": (0.1, 20.0),
+    "pfl_kp": (0.5, 100.0),
+    "pfl_kd": (0.1, 50.0),
+    "pid_kp": (_MIN_GAIN, _MAX_GAIN),
+    "pid_ki": (_MIN_GAIN, _MAX_GAIN),
+    "pid_kd": (_MIN_GAIN, _MAX_GAIN),
+    "lqr_q_theta": (_MIN_GAIN, _MAX_GAIN_LQR),
+    "lqr_q_theta_dot": (_MIN_GAIN, _MAX_GAIN_LQR),
+    "lqr_q_phi_dot": (_MIN_GAIN, _MAX_GAIN_LQR),
+    "lqr_q_current": (_MIN_GAIN, _MAX_GAIN_LQR),
+    "lqr_r": (_MIN_GAIN, _MAX_GAIN_LQR),
+}
 
 # Multi-scenario robustness: test gains across varied initial conditions
 _TEST_WHEEL_SPEED: float = 5.0
@@ -96,6 +130,7 @@ class AutoTunerManager:
         self._task: Optional[asyncio.Task[None]] = None
         self._status: AutoTunerStatus = AutoTunerStatus.idle
         self._target: TuningTarget = TuningTarget.pid
+        self._swing_up_method: SwingUpMethod = ctrl_params.swing_up_method
         self._initial_angle: float = _DEFAULT_INITIAL_ANGLE
         self._iteration: int = 0
         self._best_kp: float = ctrl_params.pid_kp
@@ -174,6 +209,17 @@ class AutoTunerManager:
 
         self._initial_angle = initial_angle
         self._target = target
+        self._swing_up_method = self._ctrl_params.swing_up_method
+        if (
+            self._target in (TuningTarget.swing_up_pid, TuningTarget.swing_up_lqr)
+            and abs(initial_angle) <= math.pi / 2.0
+        ):
+            self._initial_angle = _SWING_UP_INITIAL_ANGLE
+            logger.info(
+                "Swing-up tuning: initial angle %.3f rad unsuitable; using %.3f rad.",
+                initial_angle,
+                _SWING_UP_INITIAL_ANGLE,
+            )
         self._status = AutoTunerStatus.running
         self._iteration = 0
         self._best_gains = self._initial_gains()
@@ -203,8 +249,33 @@ class AutoTunerManager:
         match self._target:
             case TuningTarget.lqr:
                 return _LQR_PARAM_NAMES
+            case TuningTarget.swing_up_pid | TuningTarget.swing_up_lqr:
+                return self._swing_up_param_names()
             case _:
                 return _PID_PARAM_NAMES
+
+    def _swing_up_param_names(self) -> tuple[str, ...]:
+        """Return parameter names searched for swing-up tuning targets.
+
+        Combines the common swing-up thresholds, the swing-up-method gains
+        (energy or PFL, fixed at tuning start), and the balance-controller
+        gains matching the target.
+        """
+        names: list[str] = [
+            "swing_up_max_wheel_speed",
+            "upright_angle_threshold",
+            "upright_velocity_threshold",
+        ]
+        match self._swing_up_method:
+            case SwingUpMethod.pfl:
+                names.extend(("pfl_kp", "pfl_kd"))
+            case _:
+                names.append("energy_swing_up_gain")
+        if self._target == TuningTarget.swing_up_lqr:
+            names.extend(_LQR_PARAM_NAMES)
+        else:
+            names.extend(_PID_PARAM_NAMES)
+        return tuple(names)
 
     def _step_factors(self) -> tuple[float, ...]:
         """Return the multiplicative step factors for the current target."""
@@ -214,13 +285,21 @@ class AutoTunerManager:
             case _:
                 return _STEP_FACTORS
 
-    def _max_gain(self) -> float:
-        """Return the gain upper bound for the current target."""
+    def _gain_bounds(self, name: str) -> tuple[float, float]:
+        """Return the (min, max) search bounds for a tunable parameter.
+
+        Swing-up targets use per-parameter bounds; balance targets keep
+        the global PID/LQR gain limits.
+        """
+        if self._target in (TuningTarget.swing_up_pid, TuningTarget.swing_up_lqr):
+            bounds = _SWING_UP_PARAM_BOUNDS.get(name)
+            if bounds is not None:
+                return bounds
         match self._target:
-            case TuningTarget.lqr:
-                return _MAX_GAIN_LQR
+            case TuningTarget.lqr | TuningTarget.swing_up_lqr:
+                return (_MIN_GAIN, _MAX_GAIN_LQR)
             case _:
-                return _MAX_GAIN
+                return (_MIN_GAIN, _MAX_GAIN)
 
     def _initial_gains(self) -> dict[str, float]:
         """Extract initial gain values from current ctrl_params for the target."""
@@ -233,6 +312,33 @@ class AutoTunerManager:
                     "lqr_q_current": self._ctrl_params.lqr_q_current,
                     "lqr_r": self._ctrl_params.lqr_r,
                 }
+            case TuningTarget.swing_up_pid | TuningTarget.swing_up_lqr:
+                gains: dict[str, float] = {
+                    "swing_up_max_wheel_speed": self._ctrl_params.swing_up_max_wheel_speed,
+                    "upright_angle_threshold": self._ctrl_params.upright_angle_threshold,
+                    "upright_velocity_threshold": self._ctrl_params.upright_velocity_threshold,
+                }
+                match self._swing_up_method:
+                    case SwingUpMethod.pfl:
+                        gains["pfl_kp"] = self._ctrl_params.pfl_kp
+                        gains["pfl_kd"] = self._ctrl_params.pfl_kd
+                    case _:
+                        gains["energy_swing_up_gain"] = self._ctrl_params.energy_swing_up_gain
+                if self._target == TuningTarget.swing_up_lqr:
+                    gains.update({
+                        "lqr_q_theta": self._ctrl_params.lqr_q_theta,
+                        "lqr_q_theta_dot": self._ctrl_params.lqr_q_theta_dot,
+                        "lqr_q_phi_dot": self._ctrl_params.lqr_q_phi_dot,
+                        "lqr_q_current": self._ctrl_params.lqr_q_current,
+                        "lqr_r": self._ctrl_params.lqr_r,
+                    })
+                else:
+                    gains.update({
+                        "pid_kp": self._ctrl_params.pid_kp,
+                        "pid_ki": self._ctrl_params.pid_ki,
+                        "pid_kd": self._ctrl_params.pid_kd,
+                    })
+                return gains
             case _:
                 return {
                     "pid_kp": self._ctrl_params.pid_kp,
@@ -277,19 +383,22 @@ class AutoTunerManager:
             )
 
         step_factors = self._step_factors()
-        max_gain = self._max_gain()
 
         for iteration in range(1, _MAX_ITERATIONS + 1):
             self._iteration = iteration
             improved = False
 
             for param_idx in range(len(param_names)):
+                name = param_names[param_idx]
+                low, high = self._gain_bounds(name)
                 for factor in step_factors:
-                    trial = dict(best_gains)
-                    name = param_names[param_idx]
-                    trial[name] = max(_MIN_GAIN, trial[name] * factor)
-                    if trial[name] > max_gain:
+                    new_value = best_gains[name] * factor
+                    if new_value < low:
+                        new_value = low
+                    if new_value > high or new_value == best_gains[name]:
                         continue
+                    trial = dict(best_gains)
+                    trial[name] = new_value
                     cost, times, thetas = await self._evaluate(trial)
 
                     await self._broadcast_progress(
@@ -406,6 +515,9 @@ class AutoTunerManager:
             (total_cost, decimated_times, decimated_thetas from the
             primary scenario).
         """
+        if self._target in (TuningTarget.swing_up_pid, TuningTarget.swing_up_lqr):
+            return await self._evaluate_swing_up(gains)
+
         scenarios = self._get_test_scenarios()
         total_cost: float = 0.0
         primary_times: list[float] = []
@@ -422,6 +534,145 @@ class AutoTunerManager:
                 primary_thetas = thetas
 
         return total_cost, primary_times, primary_thetas
+
+    async def _evaluate_swing_up(
+        self,
+        gains: dict[str, float],
+    ) -> tuple[float, list[float], list[float]]:
+        """Evaluate candidate swing-up gains from a hanging initial condition.
+
+        Runs an 8-second simulation starting near the downward equilibrium.
+        Success is detected with fixed upright criteria, independent of the
+        candidate thresholds so the tuner cannot inflate them: the pendulum
+        must hold ``abs(theta) < 0.1`` and ``abs(theta_dot) < 0.5`` for
+        0.3 s. On success the cost combines time-to-success, post-success
+        ITAE, voltage effort, and wheel-speed penalties. On failure a large
+        penalty is returned with a shaping term rewarding closeness to
+        upright (integral of ``1 - cos(theta)``). Wheel-speed excursions
+        beyond the candidate ``swing_up_max_wheel_speed`` are penalized
+        regardless of the controller governor.
+
+        Parameters
+        ----------
+        gains : dict[str, float]
+            Candidate gain values keyed by parameter name.
+
+        Returns
+        -------
+        tuple[float, list[float], list[float]]
+            (cost, decimated_times, decimated_thetas).
+        """
+        sim_params = self._sim_params.model_copy(
+            update={
+                "initial_theta": self._initial_angle,
+                "initial_theta_dot": 0.0,
+                "initial_phi": 0.0,
+                "initial_phi_dot": 0.0,
+                "initial_current": 0.0,
+            }
+        )
+        ctrl_params = self._ctrl_params.model_copy(
+            update={**gains, "swing_up_method": self._swing_up_method}
+        )
+
+        sim = Simulation(sim_params)
+
+        match self._target:
+            case TuningTarget.swing_up_lqr:
+                controller = SwingUpBalanceController(balance_mode="lqr")
+            case _:
+                controller = SwingUpBalanceController(balance_mode="pid")
+        controller.reset()
+
+        if self._target == TuningTarget.swing_up_lqr:
+            # Trigger the Riccati solve near upright before running the loop.
+            controller.compute_voltage(
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, sim_params, ctrl_params,
+            )
+            if controller.lqr_warning is not None:
+                logger.warning(
+                    "Swing-up LQR auto-tuner: Riccati solve failed for gains %s: %s",
+                    gains,
+                    controller.lqr_warning,
+                )
+                return _FALL_PENALTY, [], []
+
+        dt = sim_params.time_step
+        total_steps = int(_SWING_UP_TUNING_DURATION_S / dt)
+        max_wheel_speed = ctrl_params.swing_up_max_wheel_speed
+
+        cost: float = 0.0
+        times: list[float] = []
+        thetas: list[float] = []
+        success_time: Optional[float] = None
+        hold_start: Optional[float] = None
+        wheel_violation_cost: float = 0.0
+        upright_closeness: float = 0.0
+
+        for step_idx in range(total_steps):
+            state = sim.state_array
+            theta = float(state[0])
+            theta_dot = float(state[1])
+            phi_dot = float(state[3])
+            current = float(state[4])
+            t = sim.time
+
+            voltage = controller.compute_voltage(
+                theta,
+                theta_dot,
+                phi_dot,
+                current,
+                sim.cached_energy,
+                t,
+                sim_params,
+                ctrl_params,
+            )
+            sim.step(voltage)
+
+            if not sim.state_is_finite:
+                return _FALL_PENALTY, times, thetas
+
+            cost += _EFFORT_WEIGHT * (voltage ** 2) * dt
+
+            excess_speed = abs(phi_dot) - max_wheel_speed
+            if excess_speed > 0.0:
+                wheel_violation_cost += _SWING_UP_WHEEL_SPEED_PENALTY * excess_speed * dt
+
+            if success_time is None:
+                upright_closeness += (1.0 - math.cos(theta)) * dt
+                if (
+                    abs(theta) < _SWING_UP_SUCCESS_ANGLE
+                    and abs(theta_dot) < _SWING_UP_SUCCESS_VELOCITY
+                ):
+                    if hold_start is None:
+                        hold_start = t
+                    elif t - hold_start >= _SWING_UP_SUCCESS_HOLD_S:
+                        success_time = hold_start
+                else:
+                    hold_start = None
+            else:
+                cost += (t - success_time) * abs(theta) * dt
+
+            if step_idx % _DECIMATION_FACTOR == 0:
+                times.append(t)
+                thetas.append(theta)
+
+            if step_idx % _YIELD_INTERVAL == 0:
+                await asyncio.sleep(0)
+
+        cost += wheel_violation_cost
+
+        if success_time is None:
+            cost += _FALL_PENALTY + _SWING_UP_SHAPING_WEIGHT * upright_closeness
+            return cost, times, thetas
+
+        cost += _SWING_UP_TIME_WEIGHT * success_time
+
+        final_phi_dot = float(sim.state_array[3])
+        if abs(final_phi_dot) > _WHEEL_SPEED_THRESHOLD:
+            cost += _WHEEL_SPEED_PENALTY
+
+        return cost, times, thetas
 
     async def _evaluate_single(
         self,
