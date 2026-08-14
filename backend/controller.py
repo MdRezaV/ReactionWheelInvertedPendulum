@@ -238,6 +238,7 @@ class LQRController(Controller):
         self._pid_fallback: PIDController = PIDController()
         self._last_sim_params: Optional[SimulationParameters] = None
         self._last_ctrl_params: Optional[ControlParameters] = None
+        self._state_buf: np.ndarray = np.zeros(4, dtype=np.float64)
 
     @property
     def warning(self) -> Optional[str]:
@@ -407,8 +408,11 @@ class LQRController(Controller):
             )
 
         # State feedback: V = -K @ [theta, theta_dot, phi_dot, i_a]
-        x = np.array([theta, theta_dot, phi_dot, current], dtype=np.float64)
-        v = float(-self._gain @ x)
+        self._state_buf[0] = theta
+        self._state_buf[1] = theta_dot
+        self._state_buf[2] = phi_dot
+        self._state_buf[3] = current
+        v = float(-self._gain @ self._state_buf)
 
         return self._clamp_voltage(v, sim_params.max_voltage)
 
