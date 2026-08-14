@@ -30,7 +30,7 @@ def _wrap_angle(angle: float) -> float:
 
 
 class Simulation:
-    """Fixed-step RK4 simulation of a reaction wheel inverted pendulum.
+    """Fixed-step 5th-order Runge-Kutta simulation of a reaction wheel inverted pendulum.
 
     The system models a DC motor with gearbox driving a reaction wheel
     mounted on an inverted pendulum. The full 5-state ODE captures the
@@ -488,19 +488,6 @@ class Simulation:
         s[0] = _wrap_angle(s[0])
         s[2] = _wrap_angle(s[2])
         self._time += dt
-
-    def apply_impulse(self, voltage: float, duration_steps: int) -> None:
-        """Apply a constant disturbance voltage for a number of steps.
-
-        Parameters
-        ----------
-        voltage : float
-            Disturbance voltage [V] (will be saturated).
-        duration_steps : int
-            Number of physics steps to apply the disturbance.
-        """
-        for _ in range(max(1, duration_steps)):
-            self.step(voltage)
 
     # ------------------------------------------------------------------
     # Properties
