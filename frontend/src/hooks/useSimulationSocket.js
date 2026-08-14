@@ -4,7 +4,7 @@ import { decode } from '@msgpack/msgpack'
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/telemetry`
 const MAX_BUFFER_SIZE = 600
 
-const INT_TO_MODE = ['none', 'pid', 'lqr', 'energy_swing_up', 'sliding_mode', 'manual']
+const INT_TO_MODE = ['none', 'pid', 'lqr', 'energy_swing_up', 'sliding_mode', 'manual', 'swing_up', 'swing_up_lqr', 'swing_up_pid']
 const FIELD_NAMES = ['time', 'theta', 'theta_dot', 'theta_ddot', 'phi', 'phi_dot', 'phi_ddot', 'voltage', 'current', 'back_emf', 'motor_torque', 'wheel_torque', 'energy', 'kinetic_energy', 'potential_energy', 'angular_momentum', 'mode']
 
 /**

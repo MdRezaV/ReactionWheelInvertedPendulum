@@ -7,6 +7,33 @@ const STATUS_LABELS = {
   complete: 'تکمیل شد',
 }
 
+const TUNER_TARGETS = [
+  { value: 'pid', label: 'تعادل PID' },
+  { value: 'lqr', label: 'تعادل LQR' },
+  { value: 'swing_up_pid', label: 'بالا بردن + PID' },
+  { value: 'swing_up_lqr', label: 'بالا بردن + LQR' },
+]
+
+const PARAM_LABELS = {
+  pid_kp: 'K_p',
+  pid_ki: 'K_i',
+  pid_kd: 'K_d',
+  lqr_q_theta: 'Q_θ',
+  lqr_q_theta_dot: 'Q_θ̇',
+  lqr_q_phi_dot: 'Q_φ̇',
+  lqr_q_current: 'Q_i',
+  lqr_r: 'R',
+  energy_swing_up_gain: 'بهره نوسان انرژی',
+  pfl_kp: 'بهره تناسبی PFL',
+  pfl_kd: 'بهره مشتقی PFL',
+  swing_up_max_wheel_speed: 'حداکثر سرعت چرخ',
+  upright_angle_threshold: 'آستانه زاویه سوئیچ',
+  upright_velocity_threshold: 'آستانه سرعت سوئیچ',
+}
+
+const ANGLE_DEG_KEYS = new Set(['upright_angle_threshold', 'upright_velocity_threshold'])
+const RAD2DEG = 180 / Math.PI
+
 export default function TuningTab({ send, tuningProgress, tuningResponse }) {
   const canvasRef = useRef(null)
   const [target, setTarget] = useState('pid')
@@ -23,7 +50,6 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
   const best = progress.best || {}
   const current = progress.current || {}
   const status = progress.status || 'idle'
-  const displayTarget = progress.target || target
   const iteration = progress.iteration ?? 0
   const isRunning = status === 'running'
 
@@ -142,19 +168,35 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
 
   const fmt = (v) => v !== undefined ? toPersianDigits(v.toFixed(4)) : '—'
 
-  const gainFields = displayTarget === 'lqr'
-    ? [
-        { label: 'Q_θ', key: 'lqr_q_theta' },
-        { label: 'Q_θ̇', key: 'lqr_q_theta_dot' },
-        { label: 'Q_φ̇', key: 'lqr_q_phi_dot' },
-        { label: 'Q_i', key: 'lqr_q_current' },
-        { label: 'R', key: 'lqr_r' },
-      ]
-    : [
-        { label: 'K_p', key: 'kp' },
-        { label: 'K_i', key: 'ki' },
-        { label: 'K_d', key: 'kd' },
-      ]
+  const fmtGain = (key, v) => {
+    if (v === undefined || v === null) return '—'
+    if (ANGLE_DEG_KEYS.has(key)) return toPersianDigits((v * RAD2DEG).toFixed(2))
+    return toPersianDigits(v.toFixed(4))
+  }
+
+  const gainUnit = (key) => {
+    if (key === 'upright_angle_threshold') return '°'
+    if (key === 'upright_velocity_threshold') return '°/s'
+    return ''
+  }
+
+  const renderGainRows = (obj) => {
+    if (!obj) return null
+    const entries = Object.entries(obj).filter(([k]) => k !== 'cost')
+    if (entries.length === 0) return <span className="text-text-dim/50 text-[12px]">—</span>
+    return entries.map(([key, val]) => {
+      const unit = gainUnit(key)
+      return (
+        <div key={key} className="flex justify-between">
+          <span className="text-text-dim">
+            {PARAM_LABELS[key] || key}
+            {unit && <span className="text-text-dim/50 text-[11px]"> ({unit})</span>}
+          </span>
+          <span className="font-mono text-text" dir="ltr">{fmtGain(key, val)}</span>
+        </div>
+      )
+    })
+  }
 
   return (
     <div dir="rtl" className="flex flex-col gap-3 h-full w-full overflow-y-auto">
@@ -169,16 +211,14 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[13px] text-text-dim">حالت کنترلر:</span>
         <div className="flex rounded-md border border-border overflow-hidden">
-          <button
-            onClick={() => setTarget('pid')}
-            disabled={isRunning}
-            className={`px-3 py-1 text-[13px] font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${target === 'pid' ? 'bg-accent/20 text-accent' : 'text-text-dim hover:bg-surface/80'}`}
-          >PID</button>
-          <button
-            onClick={() => setTarget('lqr')}
-            disabled={isRunning}
-            className={`px-3 py-1 text-[13px] font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${target === 'lqr' ? 'bg-accent/20 text-accent' : 'text-text-dim hover:bg-surface/80'}`}
-          >LQR</button>
+          {TUNER_TARGETS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTarget(t.value)}
+              disabled={isRunning}
+              className={`px-3 py-1 text-[13px] font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${target === t.value ? 'bg-accent/20 text-accent' : 'text-text-dim hover:bg-surface/80'}`}
+            >{t.label}</button>
+          ))}
         </div>
       </div>
 
@@ -198,12 +238,7 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
               <span className="text-text-dim">هزینه</span>
               <span className="font-mono text-text" dir="ltr">{fmt(best.cost)}</span>
             </div>
-            {gainFields.map(({ label, key }) => (
-              <div key={key} className="flex justify-between">
-                <span className="text-text-dim">{label}</span>
-                <span className="font-mono text-text" dir="ltr">{fmt(best[key])}</span>
-              </div>
-            ))}
+            {renderGainRows(best)}
           </div>
         </div>
         <div className="flex flex-col gap-2 p-3 rounded-md border border-border bg-card">
@@ -213,12 +248,7 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
               <span className="text-text-dim">هزینه</span>
               <span className="font-mono text-text" dir="ltr">{fmt(current.cost)}</span>
             </div>
-            {gainFields.map(({ label, key }) => (
-              <div key={key} className="flex justify-between">
-                <span className="text-text-dim">{label}</span>
-                <span className="font-mono text-text" dir="ltr">{fmt(current[key])}</span>
-              </div>
-            ))}
+            {renderGainRows(current)}
           </div>
         </div>
       </div>

@@ -47,6 +47,7 @@ const CTRL_PARAMS = [
   { key: 'energy_swing_up_gain', label: 'بهره نوسان انرژی', min: 0.1, max: 10, step: 0.1 },
   { key: 'pfl_kp', label: 'بهره تناسبی PFL', min: 0.1, max: 50, step: 0.5 },
   { key: 'pfl_kd', label: 'بهره مشتقی PFL', min: 0.1, max: 30, step: 0.5 },
+  { key: 'swing_up_max_wheel_speed', label: 'حداکثر سرعت چرخ بالا بردن', unit: 'رادیان/ثانیه', min: 5, max: 200, step: 1 },
   { key: 'smc_c1', label: 'ضریب سطح لغزش ۱', min: 0.1, max: 50, step: 0.5 },
   { key: 'smc_c2', label: 'ضریب سطح لغزش ۲', min: 0.1, max: 30, step: 0.5 },
   { key: 'smc_c3', label: 'ضریب سطح لغزش ۳', min: 0, max: 10, step: 0.1 },
@@ -530,7 +531,10 @@ export default function ControlPanel({
             const val = localOverrides[p.key] ?? params?.control?.[p.key] ?? p.min
             return (
               <div key={p.key} className="flex flex-col gap-0.5">
-                <label className="text-[13px] text-text-dim">{p.label}</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] text-text-dim">{p.label}</label>
+                  {p.unit && <span className="text-[12px] text-text-dim/60">{p.unit}</span>}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <Slider.Root
                     value={[val]}
