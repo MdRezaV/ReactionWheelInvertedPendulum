@@ -12,6 +12,8 @@ from models import (
     SimulationParameters,
     SimulationStatus,
     TelemetryMessage,
+    TuningTarget,
+    WSAutoTunerStartCommand,
     WSSetManualVoltageCommand,
 )
 
@@ -312,3 +314,60 @@ class TestControlParametersSMC:
     def test_rejects_zero_smc_boundary(self):
         with pytest.raises(ValidationError):
             ControlParameters(smc_boundary=0.0)
+
+
+class TestTuningTarget:
+    """Verify TuningTarget enum values."""
+
+    def test_swing_up_pid_value(self):
+        assert TuningTarget.swing_up_pid == "swing_up_pid"
+
+    def test_swing_up_lqr_value(self):
+        assert TuningTarget.swing_up_lqr == "swing_up_lqr"
+
+    def test_all_targets_present(self):
+        targets = [t.value for t in TuningTarget]
+        assert "pid" in targets
+        assert "lqr" in targets
+        assert "swing_up_pid" in targets
+        assert "swing_up_lqr" in targets
+
+
+class TestWSAutoTunerStartCommandTarget:
+    """Verify WSAutoTunerStartCommand validates new tuning targets."""
+
+    def test_accepts_swing_up_pid(self):
+        cmd = WSAutoTunerStartCommand(target="swing_up_pid")
+        assert cmd.target == TuningTarget.swing_up_pid
+
+    def test_accepts_swing_up_lqr(self):
+        cmd = WSAutoTunerStartCommand(target="swing_up_lqr")
+        assert cmd.target == TuningTarget.swing_up_lqr
+
+    def test_accepts_pid(self):
+        cmd = WSAutoTunerStartCommand(target="pid")
+        assert cmd.target == TuningTarget.pid
+
+    def test_accepts_lqr(self):
+        cmd = WSAutoTunerStartCommand(target="lqr")
+        assert cmd.target == TuningTarget.lqr
+
+    def test_rejects_invalid_target(self):
+        with pytest.raises(ValidationError):
+            WSAutoTunerStartCommand(target="invalid_target")
+
+
+class TestControlParametersSwingUpMaxWheelSpeed:
+    """Verify swing_up_max_wheel_speed default and validation."""
+
+    def test_default_value(self):
+        params = ControlParameters()
+        assert params.swing_up_max_wheel_speed == 50.0
+
+    def test_rejects_zero(self):
+        with pytest.raises(ValidationError):
+            ControlParameters(swing_up_max_wheel_speed=0.0)
+
+    def test_rejects_negative(self):
+        with pytest.raises(ValidationError):
+            ControlParameters(swing_up_max_wheel_speed=-10.0)
