@@ -125,6 +125,8 @@ async def get_status() -> StatusResponse:
         control_mode=base.control_mode,
         client_count=_ws_manager.client_count,
         warnings=_sim_manager.warnings,
+        speed_multiplier=base.speed_multiplier,
+        active_disturbances=base.active_disturbances,
     )
 
 
