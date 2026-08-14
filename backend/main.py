@@ -314,7 +314,11 @@ if _FRONTEND_DIST.is_dir():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str) -> FileResponse:
-        file_path = _FRONTEND_DIST / full_path
-        if full_path and file_path.is_file():
+        file_path = (_FRONTEND_DIST / full_path).resolve()
+        if (
+            full_path
+            and file_path.is_file()
+            and file_path.is_relative_to(_FRONTEND_DIST.resolve())
+        ):
             return FileResponse(file_path)
         return FileResponse(_FRONTEND_DIST / "index.html")
