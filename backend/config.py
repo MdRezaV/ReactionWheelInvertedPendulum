@@ -66,7 +66,6 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "lqr_q_theta": 100.0,
     "lqr_q_theta_dot": 1.0,
     "lqr_q_phi_dot": 10.0,
-    "lqr_q_phi": 0.1,
     "lqr_q_current": 0.01,
     "lqr_r": 1.0,
     "energy_swing_up_gain": 1.0,

@@ -140,7 +140,6 @@ class ControlParameters(BaseModel):
     lqr_q_theta: float = Field(default=100.0, ge=0, description="LQR weight on theta")
     lqr_q_theta_dot: float = Field(default=1.0, ge=0, description="LQR weight on theta_dot")
     lqr_q_phi_dot: float = Field(default=10.0, ge=0, description="LQR weight on phi_dot")
-    lqr_q_phi: float = Field(default=0.1, ge=0, description="LQR weight on phi")
     lqr_r: float = Field(default=1.0, gt=0, description="LQR control effort weight")
 
     energy_swing_up_gain: float = Field(default=1.0, gt=0, description="Energy swing-up gain")
