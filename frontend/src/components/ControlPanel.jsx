@@ -89,6 +89,7 @@ const HYBRID_SWING_UP_MODES = ['swing_up_lqr', 'swing_up_pid']
 const SWING_UP_METHODS = [
   { value: 'energy', label: 'انرژی‌محور' },
   { value: 'pfl', label: 'خطی‌سازی بازخورد جزئی (PFL)' },
+  { value: 'zero_velocity', label: 'نوسان در سرعت صفر' },
 ]
 
 const INITIAL_STATE_PARAMS = [

@@ -82,4 +82,6 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "pfl_kp": 5.0,
     "pfl_kd": 2.0,
     "swing_up_max_wheel_speed": 50.0,
+    "zero_velocity_swing_gain": 8.0,
+    "zero_velocity_impulse_duration": 0.05,
 }

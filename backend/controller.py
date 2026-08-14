@@ -458,13 +458,19 @@ class SwingUpBalanceController(Controller):
         self._pid: Optional[PIDController] = (
             PIDController() if balance_mode == "pid" else None
         )
+        self._prev_theta_dot: float = 0.0
+        self._impulse_steps_remaining: int = 0
+        self._impulse_voltage: float = 0.0
 
     def reset(self) -> None:
-        """Reset internal balance controllers."""
+        """Reset internal balance controllers and zero-velocity impulse state."""
         if self._lqr is not None:
             self._lqr.reset()
         if self._pid is not None:
             self._pid.reset()
+        self._prev_theta_dot = 0.0
+        self._impulse_steps_remaining = 0
+        self._impulse_voltage = 0.0
 
     @property
     def lqr_warning(self) -> Optional[str]:
@@ -497,7 +503,7 @@ class SwingUpBalanceController(Controller):
         sim_params: SimulationParameters,
         ctrl_params: ControlParameters,
     ) -> float:
-        """Compute voltage via Partial Feedback Linearization.
+        """Compute voltage via Partial Feedback Linearization with energy-aware saturation.
 
         Desired angular acceleration:
             theta_ddot_des = -pfl_kp * sin(theta) - pfl_kd * theta_dot
@@ -505,6 +511,9 @@ class SwingUpBalanceController(Controller):
         From the coupled dynamics M11*theta_ddot + M12*phi_ddot = gravity_term,
         solve for the required phi_ddot, then convert to voltage using a
         quasi-static motor model: V ≈ R * (tau_m / Kt) + Ke * N * phi_dot.
+
+        When pendulum energy exceeds the upright target, the controller
+        switches to wheel damping to prevent continuous rotation.
 
         Parameters
         ----------
@@ -561,6 +570,14 @@ class SwingUpBalanceController(Controller):
         Ke = sim_params.motor_constant
         R = sim_params.motor_resistance
 
+        # Energy-aware saturation: if pendulum energy exceeds upright target,
+        # apply wheel damping instead of further pumping to prevent continuous rotation.
+        e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
+        if e_pendulum > 0.0:
+            v_damping = -0.5 * R * (Kt / Kt) * phi_dot  # simplified: oppose wheel motion
+            v_damping = -Ke * N * phi_dot  # back-EMF braking
+            return self._clamp_voltage(v_damping, max_voltage)
+
         # Desired pendulum angular acceleration
         theta_ddot_des = (
             -ctrl_params.pfl_kp * math.sin(theta)
@@ -589,24 +606,66 @@ class SwingUpBalanceController(Controller):
     # Energy-based swing-up helper
     # ------------------------------------------------------------------
 
-    def _compute_energy_voltage(
+    def _compute_pendulum_energy(
         self,
         theta: float,
-        phi_dot: float,
-        energy: float,
+        theta_dot: float,
         sim_params: SimulationParameters,
-        ctrl_params: ControlParameters,
     ) -> float:
-        """Compute voltage via energy-based swing-up.
+        """Compute pendulum-only mechanical energy referenced to upright rest.
 
         Parameters
         ----------
         theta : float
             Pendulum angle from upright [rad].
+        theta_dot : float
+            Pendulum angular velocity [rad/s].
+        sim_params : SimulationParameters
+            Physical simulation parameters.
+
+        Returns
+        -------
+        float
+            Pendulum energy [J]; 0 at upright rest, negative below upright.
+        """
+        l_com = (
+            sim_params.pendulum_com_length
+            if sim_params.pendulum_com_length is not None
+            else sim_params.pendulum_length / 2.0
+        )
+        I_p = (
+            sim_params.pendulum_inertia
+            if sim_params.pendulum_inertia is not None
+            else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
+        )
+        ke = 0.5 * I_p * theta_dot ** 2
+        pe = sim_params.pendulum_mass * sim_params.gravity * l_com * (math.cos(theta) - 1.0)
+        return ke + pe
+
+    def _compute_energy_voltage(
+        self,
+        theta: float,
+        theta_dot: float,
+        phi_dot: float,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+    ) -> float:
+        """Compute voltage via energy-based swing-up using pendulum-only energy.
+
+        Uses the standard Åström–Furuta pumping law:
+            V = -k * (E_target - E_pendulum) * phi_dot
+
+        This prevents energy from being trapped in the wheel by tracking
+        only the pendulum's kinetic + potential energy.
+
+        Parameters
+        ----------
+        theta : float
+            Pendulum angle from upright [rad].
+        theta_dot : float
+            Pendulum angular velocity [rad/s].
         phi_dot : float
             Relative wheel angular velocity [rad/s].
-        energy : float
-            Total mechanical energy (upright-referenced) [J].
         sim_params : SimulationParameters
             Physical simulation parameters.
         ctrl_params : ControlParameters
@@ -618,24 +677,111 @@ class SwingUpBalanceController(Controller):
             Voltage command [V], clamped to [-max_voltage, max_voltage].
         """
         max_voltage = sim_params.max_voltage
+        max_wheel_speed = ctrl_params.swing_up_max_wheel_speed
 
-        # Target energy at upright rest = 0 (by convention in simulation.py)
+        # Pendulum-only energy referenced to upright rest (0 at upright)
+        e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
         e_target = 0.0
-        e_error = e_target - energy  # positive when below target
+        e_error = e_target - e_pendulum  # positive when below target
 
         gain = ctrl_params.energy_swing_up_gain
 
-        # Primary energy-pumping law: V = gain * e_error * phi_dot
-        v_energy = gain * e_error * phi_dot
+        # If pendulum energy exceeds target, apply damping to bleed wheel energy
+        if e_error < 0.0:
+            v_damping = -gain * 0.5 * phi_dot
+            return self._clamp_voltage(v_damping, max_voltage)
+
+        # Energy-pumping law: V = -gain * e_error * phi_dot
+        # (negative sign ensures energy flows into the pendulum)
+        v_energy = -gain * e_error * phi_dot
 
         # Phase-based excitation when wheel speed is too low
         if abs(phi_dot) < self._PHI_DOT_EXCITATION_THRESHOLD:
             excitation_amplitude = self._EXCITATION_FRACTION * max_voltage
             excitation_dir = math.copysign(1.0, math.sin(theta)) if abs(math.sin(theta)) > 1e-6 else 1.0
-            v_excitation = excitation_amplitude * excitation_dir
-            v_energy += v_excitation
+            v_energy += excitation_amplitude * excitation_dir
+
+        # Aggressive wheel-speed tapering: linearly reduce voltage above 60% of max
+        abs_phi_dot = abs(phi_dot)
+        taper_start = 0.6 * max_wheel_speed
+        if abs_phi_dot > taper_start:
+            scale = max(0.0, (max_wheel_speed - abs_phi_dot) / (max_wheel_speed - taper_start))
+            v_energy *= scale
 
         return self._clamp_voltage(v_energy, max_voltage)
+
+    # ------------------------------------------------------------------
+    # Zero-velocity swing-up helper
+    # ------------------------------------------------------------------
+
+    def _compute_zero_velocity_voltage(
+        self,
+        theta: float,
+        theta_dot: float,
+        phi_dot: float,
+        sim_params: SimulationParameters,
+        ctrl_params: ControlParameters,
+    ) -> float:
+        """Compute voltage via zero-velocity impulse swing-up.
+
+        Detects zero-crossings of theta_dot (pendulum at swing extremes)
+        and applies a proportional voltage pulse to the wheel in the
+        direction that pumps energy into the pendulum on the return swing.
+
+        Parameters
+        ----------
+        theta : float
+            Pendulum angle from upright [rad].
+        theta_dot : float
+            Pendulum angular velocity [rad/s].
+        phi_dot : float
+            Relative wheel angular velocity [rad/s].
+        sim_params : SimulationParameters
+            Physical simulation parameters.
+        ctrl_params : ControlParameters
+            Control gains.
+
+        Returns
+        -------
+        float
+            Voltage command [V], clamped to [-max_voltage, max_voltage].
+        """
+        max_voltage = sim_params.max_voltage
+        max_wheel_speed = ctrl_params.swing_up_max_wheel_speed
+
+        # Detect zero-crossing of theta_dot (sign change)
+        prev = self._prev_theta_dot
+        self._prev_theta_dot = theta_dot
+
+        crossed = (prev > 0.0 and theta_dot <= 0.0) or (prev < 0.0 and theta_dot >= 0.0)
+
+        if crossed and abs(theta) > 0.05:
+            # Compute pendulum energy to scale the impulse
+            e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
+            e_error = -e_pendulum  # positive when below target
+
+            if e_error > 0.0:
+                # Direction: push pendulum toward upright on the return swing.
+                # Positive voltage → positive wheel torque → negative reaction on pendulum.
+                # When theta > 0, we want to push pendulum negative (toward upright).
+                impulse_dir = math.copysign(1.0, theta)
+                gain = ctrl_params.zero_velocity_swing_gain
+                duration = ctrl_params.zero_velocity_impulse_duration
+                self._impulse_steps_remaining = max(1, int(duration / sim_params.time_step))
+                self._impulse_voltage = impulse_dir * gain * min(1.0, e_error / 2.0)
+            else:
+                self._impulse_steps_remaining = 0
+                self._impulse_voltage = 0.0
+
+        if self._impulse_steps_remaining > 0:
+            self._impulse_steps_remaining -= 1
+            # Wheel-speed safety: abort impulse if wheel is too fast
+            if abs(phi_dot) > 0.9 * max_wheel_speed:
+                self._impulse_steps_remaining = 0
+                return 0.0
+            return self._clamp_voltage(self._impulse_voltage, max_voltage)
+
+        return 0.0
 
     # ------------------------------------------------------------------
     # Main control law
@@ -705,9 +851,13 @@ class SwingUpBalanceController(Controller):
                 voltage = self._compute_pfl_voltage(
                     theta, theta_dot, phi_dot, sim_params, ctrl_params
                 )
+            case SwingUpMethod.zero_velocity:
+                voltage = self._compute_zero_velocity_voltage(
+                    theta, theta_dot, phi_dot, sim_params, ctrl_params
+                )
             case _:
                 voltage = self._compute_energy_voltage(
-                    theta, phi_dot, energy, sim_params, ctrl_params
+                    theta, theta_dot, phi_dot, sim_params, ctrl_params
                 )
 
         # Linearly taper voltage toward zero in the upper 20 % of the speed band.

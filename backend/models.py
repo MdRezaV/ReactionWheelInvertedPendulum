@@ -44,6 +44,7 @@ class AutoTunerStatus(str, Enum):
 class SwingUpMethod(str, Enum):
     energy = "energy"
     pfl = "pfl"
+    zero_velocity = "zero_velocity"
 
 
 class TuningTarget(str, Enum):
@@ -183,6 +184,15 @@ class ControlParameters(BaseModel):
     swing_up_max_wheel_speed: float = Field(
         default=50.0, gt=0,
         description="Maximum allowed wheel angular speed during swing-up [rad/s]",
+    )
+
+    zero_velocity_swing_gain: float = Field(
+        default=8.0, gt=0,
+        description="Voltage gain for zero-velocity swing-up impulses [V]",
+    )
+    zero_velocity_impulse_duration: float = Field(
+        default=0.05, gt=0,
+        description="Duration of voltage impulse at theta_dot zero crossing [s]",
     )
 
 
