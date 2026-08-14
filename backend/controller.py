@@ -678,6 +678,13 @@ class SwingUpBalanceController(Controller):
         float
             Voltage command [V], clamped to [-max_voltage, max_voltage].
         """
+        max_wheel_speed = ctrl_params.swing_up_max_wheel_speed
+        abs_phi_dot = abs(phi_dot)
+
+        # Hard safety guard: cut voltage if wheel speed is dangerously high.
+        if abs_phi_dot > 1.5 * max_wheel_speed:
+            return 0.0
+
         # Near upright: switch to balance controller if configured.
         if self._balance_mode is not None and self._is_near_upright(theta, theta_dot, ctrl_params):
             if self._balance_mode == "lqr" and self._lqr is not None:
@@ -689,16 +696,27 @@ class SwingUpBalanceController(Controller):
                     theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
                 )
 
-        # Swing-up region: dispatch on method
+        # Swing-up region: enforce wheel-speed governor.
+        if abs_phi_dot >= max_wheel_speed:
+            return 0.0
+
         match ctrl_params.swing_up_method:
             case SwingUpMethod.pfl:
-                return self._compute_pfl_voltage(
+                voltage = self._compute_pfl_voltage(
                     theta, theta_dot, phi_dot, sim_params, ctrl_params
                 )
             case _:
-                return self._compute_energy_voltage(
+                voltage = self._compute_energy_voltage(
                     theta, phi_dot, energy, sim_params, ctrl_params
                 )
+
+        # Linearly taper voltage toward zero in the upper 20 % of the speed band.
+        taper_threshold = 0.8 * max_wheel_speed
+        if abs_phi_dot > taper_threshold:
+            scale = (max_wheel_speed - abs_phi_dot) / (max_wheel_speed - taper_threshold)
+            voltage *= scale
+
+        return voltage
 
 
 # Backward-compatible alias
