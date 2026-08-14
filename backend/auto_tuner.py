@@ -31,12 +31,14 @@ logger = logging.getLogger(__name__)
 _TUNING_DURATION_S: float = 3.0
 _MAX_ITERATIONS: int = 10
 _STEP_FACTORS: tuple[float, ...] = (0.25, 0.5, 0.75, 1.25, 1.5, 2.0, 3.0, 5.0)
+_STEP_FACTORS_LQR: tuple[float, ...] = (0.1, 0.25, 0.5, 0.75, 1.25, 1.5, 2.0, 3.0, 5.0, 10.0)
 _YIELD_INTERVAL: int = 100
 _DECIMATION_FACTOR: int = 10
 _FALL_ANGLE: float = math.pi / 2.0
 _FALL_PENALTY: float = 1e4
 _MIN_GAIN: float = 0.0
 _MAX_GAIN: float = 1000.0
+_MAX_GAIN_LQR: float = 50000.0
 _EFFORT_WEIGHT: float = 1e-3
 _DEFAULT_INITIAL_ANGLE: float = math.radians(5.0)
 
@@ -204,6 +206,22 @@ class AutoTunerManager:
             case _:
                 return _PID_PARAM_NAMES
 
+    def _step_factors(self) -> tuple[float, ...]:
+        """Return the multiplicative step factors for the current target."""
+        match self._target:
+            case TuningTarget.lqr:
+                return _STEP_FACTORS_LQR
+            case _:
+                return _STEP_FACTORS
+
+    def _max_gain(self) -> float:
+        """Return the gain upper bound for the current target."""
+        match self._target:
+            case TuningTarget.lqr:
+                return _MAX_GAIN_LQR
+            case _:
+                return _MAX_GAIN
+
     def _initial_gains(self) -> dict[str, float]:
         """Extract initial gain values from current ctrl_params for the target."""
         match self._target:
@@ -258,16 +276,19 @@ class AutoTunerManager:
                 best_times, best_thetas
             )
 
+        step_factors = self._step_factors()
+        max_gain = self._max_gain()
+
         for iteration in range(1, _MAX_ITERATIONS + 1):
             self._iteration = iteration
             improved = False
 
             for param_idx in range(len(param_names)):
-                for factor in _STEP_FACTORS:
+                for factor in step_factors:
                     trial = dict(best_gains)
                     name = param_names[param_idx]
                     trial[name] = max(_MIN_GAIN, trial[name] * factor)
-                    if trial[name] > _MAX_GAIN:
+                    if trial[name] > max_gain:
                         continue
                     cost, times, thetas = await self._evaluate(trial)
 
@@ -454,6 +475,18 @@ class AutoTunerManager:
             case _:
                 controller = PIDController()
         controller.reset()
+
+        if self._target == TuningTarget.lqr:
+            controller.compute_voltage(
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, sim_params, ctrl_params,
+            )
+            if controller.warning is not None:
+                logger.warning(
+                    "LQR auto-tuner: Riccati solve failed for gains %s: %s",
+                    gains,
+                    controller.warning,
+                )
+                return _FALL_PENALTY, [], []
 
         dt = sim_params.time_step
         total_steps = int(_TUNING_DURATION_S / dt)

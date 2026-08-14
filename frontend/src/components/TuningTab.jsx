@@ -144,11 +144,11 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
 
   const gainFields = displayTarget === 'lqr'
     ? [
-        { label: 'Q_θ', key: 'q_theta' },
-        { label: 'Q_θ̇', key: 'q_theta_dot' },
-        { label: 'Q_φ̇', key: 'q_phi_dot' },
-        { label: 'Q_i', key: 'q_i' },
-        { label: 'R', key: 'r' },
+        { label: 'Q_θ', key: 'lqr_q_theta' },
+        { label: 'Q_θ̇', key: 'lqr_q_theta_dot' },
+        { label: 'Q_φ̇', key: 'lqr_q_phi_dot' },
+        { label: 'Q_i', key: 'lqr_q_current' },
+        { label: 'R', key: 'lqr_r' },
       ]
     : [
         { label: 'K_p', key: 'kp' },
