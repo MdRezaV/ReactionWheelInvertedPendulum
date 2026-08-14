@@ -11,7 +11,7 @@ export default function PendulumCanvas({ latest, params }) {
   const animRef = useRef(null)
   const TRAIL_LEN = 28
   const stateRef = useRef({ theta: 0, targetTheta: 0, phi_dot: 0, theta_dot: 0, voltage: 0, current: 0, wheelAngle: 0, lastTime: 0, smoothSpeedNorm: 0, trailX: new Float64Array(TRAIL_LEN), trailY: new Float64Array(TRAIL_LEN), trailHead: 0, trailCount: 0 })
-  const dimsRef = useRef({ armLength: 70, wheelRadius: 12, wheelInnerRadius: 6 })
+  const dimsRef = useRef({ armLength: 70, wheelRadius: 12, wheelInnerRadius: 6, switchAngle: 0.3 })
 
   useEffect(() => {
     if (latest) {
@@ -34,6 +34,7 @@ export default function PendulumCanvas({ latest, params }) {
       dimsRef.current.wheelRadius = Math.max(rad * scale, MIN_WHEEL_PX)
       dimsRef.current.wheelInnerRadius = Math.max(innerRad * scale, MIN_WHEEL_PX)
     }
+    dimsRef.current.switchAngle = params?.control?.upright_angle_threshold ?? 0.3
   }, [params])
 
   useEffect(() => {
@@ -115,8 +116,8 @@ export default function PendulumCanvas({ latest, params }) {
 
       // Equilibrium / danger zone wedges
       const zoneRadius = armLength + 8
-      const safeHalf = 5 * Math.PI / 180
-      const cautionHalf = 30 * Math.PI / 180
+      const safeHalf = dimsRef.current.switchAngle
+      const cautionHalf = Math.min(safeHalf * 2, Math.PI / 2)
       const up = -Math.PI / 2
 
       ctx.beginPath()
