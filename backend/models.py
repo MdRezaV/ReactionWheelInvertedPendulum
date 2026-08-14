@@ -30,12 +30,20 @@ class ControlMode(str, Enum):
     energy_swing_up = "energy_swing_up"
     sliding_mode = "sliding_mode"
     manual = "manual"
+    swing_up = "swing_up"
+    swing_up_lqr = "swing_up_lqr"
+    swing_up_pid = "swing_up_pid"
 
 
 class AutoTunerStatus(str, Enum):
     idle = "idle"
     running = "running"
     complete = "complete"
+
+
+class SwingUpMethod(str, Enum):
+    energy = "energy"
+    pfl = "pfl"
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +170,10 @@ class ControlParameters(BaseModel):
 
     manual_voltage: float = Field(default=0.0, description="Manual voltage command [V]")
 
+    swing_up_method: SwingUpMethod = Field(default=SwingUpMethod.energy, description="Swing-up algorithm")
+    pfl_kp: float = Field(default=5.0, gt=0, description="PFL swing-up proportional gain")
+    pfl_kd: float = Field(default=2.0, gt=0, description="PFL swing-up derivative gain")
+
 
 # ---------------------------------------------------------------------------
 # API Response Schemas
@@ -232,6 +244,7 @@ TELEMETRY_FIELD_ORDER: list[str] = [
 MODE_TO_INT: dict[str, int] = {
     "none": 0, "pid": 1, "lqr": 2,
     "energy_swing_up": 3, "sliding_mode": 4, "manual": 5,
+    "swing_up": 6, "swing_up_lqr": 7, "swing_up_pid": 8,
 }
 INT_TO_MODE: dict[int, str] = {v: k for k, v in MODE_TO_INT.items()}
 

@@ -78,4 +78,7 @@ DEFAULT_CONTROL_PARAMS: dict = {
     "upright_angle_threshold": 0.3,
     "upright_velocity_threshold": 1.0,
     "manual_voltage": 0.0,
+    "swing_up_method": "energy",
+    "pfl_kp": 5.0,
+    "pfl_kd": 2.0,
 }
