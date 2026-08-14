@@ -768,10 +768,11 @@ class SwingUpBalanceController(Controller):
                 # Positive voltage → positive wheel torque → negative reaction on pendulum.
                 # When theta > 0, we want to push pendulum negative (toward upright).
                 impulse_dir = math.copysign(1.0, theta)
-                gain = ctrl_params.zero_velocity_swing_gain
+
                 duration = ctrl_params.zero_velocity_impulse_duration
+
                 self._impulse_steps_remaining = max(1, int(duration / sim_params.time_step))
-                self._impulse_voltage = impulse_dir * gain * min(1.0, e_error / 2.0)
+                self._impulse_voltage = impulse_dir * max_voltage
             else:
                 self._impulse_steps_remaining = 0
                 self._impulse_voltage = 0.0
