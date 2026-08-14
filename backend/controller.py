@@ -466,6 +466,21 @@ class SwingUpBalanceController(Controller):
         self._impulse_steps_remaining: int = 0
         self._impulse_voltage: float = 0.0
 
+        # Cached derived physical quantities (recomputed only when sim_params changes)
+        self._cached_sim_params: Optional[SimulationParameters] = None
+        self._cached_l_com: Optional[float] = None
+        self._cached_I_p: Optional[float] = None
+        self._cached_I_w: Optional[float] = None
+        self._cached_N: Optional[float] = None
+        self._cached_I_w_eff: Optional[float] = None
+        self._cached_M11: Optional[float] = None
+        self._cached_M12: Optional[float] = None
+        self._cached_M22: Optional[float] = None
+        self._cached_gravity_coeff: Optional[float] = None
+        self._cached_Kt: Optional[float] = None
+        self._cached_Ke: Optional[float] = None
+        self._cached_R: Optional[float] = None
+
     def reset(self) -> None:
         """Reset internal balance controllers and zero-velocity impulse state."""
         if self._lqr is not None:
@@ -475,6 +490,77 @@ class SwingUpBalanceController(Controller):
         self._prev_theta_dot = 0.0
         self._impulse_steps_remaining = 0
         self._impulse_voltage = 0.0
+        self._cached_sim_params = None
+        self._cached_l_com = None
+        self._cached_I_p = None
+        self._cached_I_w = None
+        self._cached_N = None
+        self._cached_I_w_eff = None
+        self._cached_M11 = None
+        self._cached_M12 = None
+        self._cached_M22 = None
+        self._cached_gravity_coeff = None
+        self._cached_Kt = None
+        self._cached_Ke = None
+        self._cached_R = None
+
+    def _ensure_derived(self, sim_params: SimulationParameters) -> None:
+        """Recompute and cache derived physical quantities if sim_params changed.
+
+        Uses an identity check as a fast-path so that repeated calls within
+        the same physics step (where the same object is passed) skip all work.
+
+        Parameters
+        ----------
+        sim_params : SimulationParameters
+            Current physical simulation parameters.
+        """
+        if self._cached_sim_params is sim_params:
+            return
+
+        l_com = (
+            sim_params.pendulum_com_length
+            if sim_params.pendulum_com_length is not None
+            else sim_params.pendulum_length / 2.0
+        )
+        I_p = (
+            sim_params.pendulum_inertia
+            if sim_params.pendulum_inertia is not None
+            else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
+        )
+        I_w = (
+            sim_params.wheel_inertia
+            if sim_params.wheel_inertia is not None
+            else 0.5 * sim_params.wheel_mass * (
+                sim_params.wheel_outer_radius ** 2 + sim_params.wheel_inner_radius ** 2
+            )
+        )
+
+        N = sim_params.gear_ratio
+        I_w_eff = I_w + sim_params.motor_rotor_inertia * N ** 2
+
+        M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w_eff
+        M12 = I_w_eff
+        M22 = I_w_eff
+
+        gravity_coeff = (
+            (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
+            * sim_params.gravity
+        )
+
+        self._cached_sim_params = sim_params
+        self._cached_l_com = l_com
+        self._cached_I_p = I_p
+        self._cached_I_w = I_w
+        self._cached_N = N
+        self._cached_I_w_eff = I_w_eff
+        self._cached_M11 = M11
+        self._cached_M12 = M12
+        self._cached_M22 = M22
+        self._cached_gravity_coeff = gravity_coeff
+        self._cached_Kt = sim_params.motor_constant
+        self._cached_Ke = sim_params.motor_constant
+        self._cached_R = sim_params.motor_resistance
 
     @property
     def lqr_warning(self) -> Optional[str]:
@@ -537,42 +623,16 @@ class SwingUpBalanceController(Controller):
         float
             Voltage command [V], clamped to [-max_voltage, max_voltage].
         """
+        self._ensure_derived(sim_params)
         max_voltage = sim_params.max_voltage
 
-        # Effective physical quantities (mirror simulation.py logic)
-        l_com = (
-            sim_params.pendulum_com_length
-            if sim_params.pendulum_com_length is not None
-            else sim_params.pendulum_length / 2.0
-        )
-        I_p = (
-            sim_params.pendulum_inertia
-            if sim_params.pendulum_inertia is not None
-            else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
-        )
-        I_w = (
-            sim_params.wheel_inertia
-            if sim_params.wheel_inertia is not None
-            else 0.5 * sim_params.wheel_mass * (
-                sim_params.wheel_outer_radius ** 2 + sim_params.wheel_inner_radius ** 2
-            )
-        )
-
-        N = sim_params.gear_ratio
-        I_w_eff = I_w + sim_params.motor_rotor_inertia * N ** 2
-
-        M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w_eff
-        M12 = I_w_eff
-        M22 = I_w_eff
-
-        gravity_coeff = (
-            (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
-            * sim_params.gravity
-        )
-
-        Kt = sim_params.motor_constant
-        Ke = sim_params.motor_constant
-        R = sim_params.motor_resistance
+        M11 = self._cached_M11
+        M12 = self._cached_M12
+        M22 = self._cached_M22
+        gravity_coeff = self._cached_gravity_coeff
+        Kt = self._cached_Kt
+        Ke = self._cached_Ke
+        R = self._cached_R
 
         # Energy-aware saturation: if pendulum energy exceeds upright target,
         # apply wheel damping instead of further pumping to prevent continuous rotation.
@@ -631,16 +691,9 @@ class SwingUpBalanceController(Controller):
         float
             Pendulum energy [J]; 0 at upright rest, negative below upright.
         """
-        l_com = (
-            sim_params.pendulum_com_length
-            if sim_params.pendulum_com_length is not None
-            else sim_params.pendulum_length / 2.0
-        )
-        I_p = (
-            sim_params.pendulum_inertia
-            if sim_params.pendulum_inertia is not None
-            else (1.0 / 3.0) * sim_params.pendulum_mass * sim_params.pendulum_length ** 2
-        )
+        self._ensure_derived(sim_params)
+        I_p = self._cached_I_p
+        l_com = self._cached_l_com
         ke = 0.5 * I_p * theta_dot ** 2
         pe = (
             (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
@@ -683,6 +736,7 @@ class SwingUpBalanceController(Controller):
         float
             Voltage command [V], clamped to [-max_voltage, max_voltage].
         """
+        self._ensure_derived(sim_params)
         max_voltage = sim_params.max_voltage
         max_wheel_speed = ctrl_params.swing_up_max_wheel_speed
 
