@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toPersianDigits } from '../utils/format'
 
 const STATUS_LABELS = {
@@ -9,10 +9,11 @@ const STATUS_LABELS = {
 
 export default function TuningTab({ send, tuningProgress, tuningResponse }) {
   const canvasRef = useRef(null)
+  const [target, setTarget] = useState('pid')
 
   const startTuner = useCallback(() => {
-    send({ type: 'auto_tuner_start' })
-  }, [send])
+    send({ type: 'auto_tuner_start', target })
+  }, [send, target])
 
   const stopTuner = useCallback(() => {
     send({ type: 'auto_tuner_stop' })
@@ -22,6 +23,7 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
   const best = progress.best || {}
   const current = progress.current || {}
   const status = progress.status || 'idle'
+  const displayTarget = progress.target || target
   const iteration = progress.iteration ?? 0
   const isRunning = status === 'running'
 
@@ -140,13 +142,43 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
 
   const fmt = (v) => v !== undefined ? toPersianDigits(v.toFixed(4)) : '—'
 
+  const gainFields = displayTarget === 'lqr'
+    ? [
+        { label: 'Q_θ', key: 'q_theta' },
+        { label: 'Q_θ̇', key: 'q_theta_dot' },
+        { label: 'Q_φ̇', key: 'q_phi_dot' },
+        { label: 'Q_i', key: 'q_i' },
+        { label: 'R', key: 'r' },
+      ]
+    : [
+        { label: 'K_p', key: 'kp' },
+        { label: 'K_i', key: 'ki' },
+        { label: 'K_d', key: 'kd' },
+      ]
+
   return (
     <div dir="rtl" className="flex flex-col gap-3 h-full w-full overflow-y-auto">
       <div className="flex items-center justify-between flex-shrink-0">
-        <h2 className="text-[16px] font-bold text-text-h">تنظیم خودکار بهره‌های PID</h2>
+        <h2 className="text-[16px] font-bold text-text-h">تنظیم خودکار پارامترهای کنترلر</h2>
         <div className="flex gap-1.5">
           <button onClick={startTuner} disabled={isRunning} className={`${btn} border-success/30 text-success bg-success/5`}>شروع تنظیم</button>
           <button onClick={stopTuner} disabled={!isRunning} className={`${btn} border-danger/30 text-danger bg-danger/5`}>توقف تنظیم</button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-[13px] text-text-dim">حالت کنترلر:</span>
+        <div className="flex rounded-md border border-border overflow-hidden">
+          <button
+            onClick={() => setTarget('pid')}
+            disabled={isRunning}
+            className={`px-3 py-1 text-[13px] font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${target === 'pid' ? 'bg-accent/20 text-accent' : 'text-text-dim hover:bg-surface/80'}`}
+          >PID</button>
+          <button
+            onClick={() => setTarget('lqr')}
+            disabled={isRunning}
+            className={`px-3 py-1 text-[13px] font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${target === 'lqr' ? 'bg-accent/20 text-accent' : 'text-text-dim hover:bg-surface/80'}`}
+          >LQR</button>
         </div>
       </div>
 
@@ -166,18 +198,12 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
               <span className="text-text-dim">هزینه</span>
               <span className="font-mono text-text" dir="ltr">{fmt(best.cost)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_p</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(best.kp)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_i</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(best.ki)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_d</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(best.kd)}</span>
-            </div>
+            {gainFields.map(({ label, key }) => (
+              <div key={key} className="flex justify-between">
+                <span className="text-text-dim">{label}</span>
+                <span className="font-mono text-text" dir="ltr">{fmt(best[key])}</span>
+              </div>
+            ))}
           </div>
         </div>
         <div className="flex flex-col gap-2 p-3 rounded-md border border-border bg-card">
@@ -187,18 +213,12 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
               <span className="text-text-dim">هزینه</span>
               <span className="font-mono text-text" dir="ltr">{fmt(current.cost)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_p</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(current.kp)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_i</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(current.ki)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-dim">K_d</span>
-              <span className="font-mono text-text" dir="ltr">{fmt(current.kd)}</span>
-            </div>
+            {gainFields.map(({ label, key }) => (
+              <div key={key} className="flex justify-between">
+                <span className="text-text-dim">{label}</span>
+                <span className="font-mono text-text" dir="ltr">{fmt(current[key])}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
