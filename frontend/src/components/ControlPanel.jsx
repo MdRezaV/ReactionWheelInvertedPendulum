@@ -181,11 +181,11 @@ export default function ControlPanel({
 
   const handleParamChange = useCallback((scope, key, value) => {
     const numVal = parseFloat(value)
-    if (Number.isNaN(numVal)) return
-    setLocalOverrides(prev => ({ ...prev, [key]: numVal }))
+    const finalVal = Number.isNaN(numVal) ? value : numVal
+    setLocalOverrides(prev => ({ ...prev, [key]: finalVal }))
 
     if (!pendingRef.current[scope]) pendingRef.current[scope] = {}
-    pendingRef.current[scope][key] = numVal
+    pendingRef.current[scope][key] = finalVal
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
@@ -625,7 +625,7 @@ export default function ControlPanel({
 
             {renderDistField('دامنه', distAmp, setDistAmp, -10, 10, 0.1)}
             {(distWaveform === 'sinusoidal' || distWaveform === 'pulse' || distWaveform === 'sawtooth') && renderDistField('فرکانس (Hz)', distFreq, setDistFreq, 0, 10, 0.1)}
-            {distWaveform === 'pulse' && renderDistField('دuty cycle', distDuty, setDistDuty, 0, 1, 0.05)}
+            {distWaveform === 'pulse' && renderDistField('چرخه وظیفه', distDuty, setDistDuty, 0, 1, 0.05)}
             {distWaveform === 'gaussian_noise' && (
               <>
                 {renderDistField('میانگین', distMean, setDistMean, -5, 5, 0.1)}
@@ -675,10 +675,10 @@ export default function ControlPanel({
                     {DISTURBANCE_CHANNELS.find(c => c.value === d.channel)?.label} - {DISTURBANCE_WAVEFORMS.find(w => w.value === d.waveform)?.label}
                   </span>
                   <span className="text-text-dim/70 font-mono">
-                    amp: {d.amplitude} 
-                    {['sinusoidal', 'pulse', 'sawtooth'].includes(d.waveform) ? `, freq: ${d.frequency}` : ''}
-                    {d.waveform === 'pulse' ? `, duty: ${d.duty_cycle}` : ''}
-                    {d.waveform === 'gaussian_noise' ? `, mean: ${d.mean}, std: ${d.std}` : ''}
+                    دامنه: {toPersianDigits(String(d.amplitude))}
+                    {['sinusoidal', 'pulse', 'sawtooth'].includes(d.waveform) ? `، فرکانس: ${toPersianDigits(String(d.frequency))}` : ''}
+                    {d.waveform === 'pulse' ? `، چرخه وظیفه: ${toPersianDigits(String(d.duty_cycle))}` : ''}
+                    {d.waveform === 'gaussian_noise' ? `، میانگین: ${toPersianDigits(String(d.mean))}، انحراف معیار: ${toPersianDigits(String(d.std))}` : ''}
                   </span>
                 </div>
                 <button onClick={() => onClearDisturbance(d.id)} className="text-danger hover:text-danger/80 cursor-pointer px-2">
