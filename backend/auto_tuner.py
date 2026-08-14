@@ -325,6 +325,7 @@ class AutoTunerManager:
         await self._ws_manager.broadcast_tuning_progress(
             iteration=iteration,
             status=self._status.value,
+            target=self._target.value,
             best_gains=best_gains,
             best_cost=best_cost,
             current_gains=current_gains,

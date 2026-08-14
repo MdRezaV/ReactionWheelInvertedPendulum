@@ -516,6 +516,7 @@ class WebSocketManager:
         self,
         iteration: int,
         status: str,
+        target: str,
         best_gains: dict[str, float],
         best_cost: float,
         current_gains: dict[str, float],
@@ -529,6 +530,8 @@ class WebSocketManager:
             Current coordinate-descent iteration number.
         status : str
             Tuner status string (idle, running, complete).
+        target : str
+            Tuning target identifier (e.g. "pid", "lqr").
         best_gains : dict[str, float]
             Best gains found so far (keys depend on tuning target).
         best_cost : float
@@ -546,6 +549,7 @@ class WebSocketManager:
                 "t": 4,
                 "iteration": iteration,
                 "status": status,
+                "target": target,
                 "best": {**best_gains, "cost": best_cost},
                 "current": {**current_gains, "cost": current_cost},
             },
