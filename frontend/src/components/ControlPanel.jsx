@@ -8,7 +8,10 @@ const CONTROL_MODES = [
   { value: 'none', label: 'بدون کنترل' },
   { value: 'pid', label: 'تعادل PID' },
   { value: 'lqr', label: 'تعادل LQR' },
-  { value: 'energy_swing_up', label: 'نوسان انرژی' },
+  { value: 'energy_swing_up', label: 'نوسان انرژی (خالص)' },
+  { value: 'swing_up', label: 'بالا بردن (خالص)' },
+  { value: 'swing_up_lqr', label: 'بالا بردن + LQR' },
+  { value: 'swing_up_pid', label: 'بالا بردن + PID' },
   { value: 'sliding_mode', label: 'مد لغزشی' },
   { value: 'manual', label: 'ورودی دستی' },
 ]
@@ -42,6 +45,8 @@ const CTRL_PARAMS = [
   { key: 'lqr_r', label: 'وزن ورودی LQR', min: 0.01, max: 10, step: 0.1 },
   { key: 'lqr_q_current', label: 'وزن جریان LQR', min: 0, max: 10, step: 0.01 },
   { key: 'energy_swing_up_gain', label: 'بهره نوسان انرژی', min: 0.1, max: 10, step: 0.1 },
+  { key: 'pfl_kp', label: 'بهره تناسبی PFL', min: 0.1, max: 50, step: 0.5 },
+  { key: 'pfl_kd', label: 'بهره مشتقی PFL', min: 0.1, max: 30, step: 0.5 },
   { key: 'smc_c1', label: 'ضریب سطح لغزش ۱', min: 0.1, max: 50, step: 0.5 },
   { key: 'smc_c2', label: 'ضریب سطح لغزش ۲', min: 0.1, max: 30, step: 0.5 },
   { key: 'smc_c3', label: 'ضریب سطح لغزش ۳', min: 0, max: 10, step: 0.1 },
@@ -76,6 +81,14 @@ const TABS = [
 ]
 
 const DEGREE_PRESETS = [5, 10, 15, 20, 30]
+
+const SWING_UP_MODES = ['energy_swing_up', 'swing_up', 'swing_up_lqr', 'swing_up_pid']
+const HYBRID_SWING_UP_MODES = ['swing_up_lqr', 'swing_up_pid']
+
+const SWING_UP_METHODS = [
+  { value: 'energy', label: 'انرژی‌محور' },
+  { value: 'pfl', label: 'خطی‌سازی بازخورد جزئی (PFL)' },
+]
 
 const INITIAL_STATE_PARAMS = [
   { key: 'initial_theta', label: 'زاویه اولیه پاندول', unit: 'درجه', min: -180, max: 180, step: 0.5, isAngle: true },
@@ -292,6 +305,92 @@ export default function ControlPanel({
                 </Slider.Track>
                 <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
               </Slider.Root>
+            </div>
+          )}
+
+          {SWING_UP_MODES.includes(selectedMode) && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] text-text-dim font-bold">روش بالا بردن</label>
+              <Select.Root
+                value={localOverrides['swing_up_method'] ?? params?.control?.swing_up_method ?? 'energy'}
+                onValueChange={(v) => handleParamChange('control', 'swing_up_method', v)}
+                dir="rtl"
+              >
+                <Select.Trigger className="flex items-center justify-between px-2.5 py-1.5 text-[14px] rounded-md border border-border bg-card text-text-h cursor-pointer focus:border-accent focus:outline-none transition-colors hover:border-border-light">
+                  <Select.Value />
+                  <Select.Icon className="text-text-dim">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content position="popper" sideOffset={4} className="bg-card border border-border-light rounded-md shadow-card overflow-hidden z-50 animate-[slide-down_150ms_ease-out]">
+                    <Select.Viewport className="p-1">
+                      {SWING_UP_METHODS.map((m) => (
+                        <Select.Item key={m.value} value={m.value} className="flex items-center px-2.5 py-1.5 text-[14px] rounded-sm text-text cursor-pointer outline-none data-[highlighted]:bg-accent-dim data-[highlighted]:text-accent data-[state=checked]:text-accent">
+                          <Select.ItemText>{m.label}</Select.ItemText>
+                          <Select.ItemIndicator className="ms-auto pe-1">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+          )}
+
+          {HYBRID_SWING_UP_MODES.includes(selectedMode) && (
+            <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-surface/50">
+              <label className="text-[13px] text-text-dim font-bold">آستانه سوئیچ به کنترلر تعادل</label>
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[12px] text-text-dim/70">زاویه سوئیچ (رادیان)</label>
+                <div className="flex items-center gap-1.5">
+                  <Slider.Root
+                    value={[localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3]}
+                    min={0.05}
+                    max={1.5}
+                    step={0.05}
+                    onValueChange={([v]) => handleParamChange('control', 'upright_angle_threshold', String(v))}
+                    dir="rtl"
+                    className="relative flex items-center h-4 flex-1 select-none touch-none"
+                  >
+                    <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                      <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+                    </Slider.Track>
+                    <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+                  </Slider.Root>
+                  <NumberInput
+                    value={localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3}
+                    onCommit={(v) => handleParamChange('control', 'upright_angle_threshold', String(v))}
+                    className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[12px] text-text-dim/70">سرعت سوئیچ (رادیان/ثانیه)</label>
+                <div className="flex items-center gap-1.5">
+                  <Slider.Root
+                    value={[localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0]}
+                    min={0.1}
+                    max={5.0}
+                    step={0.1}
+                    onValueChange={([v]) => handleParamChange('control', 'upright_velocity_threshold', String(v))}
+                    dir="rtl"
+                    className="relative flex items-center h-4 flex-1 select-none touch-none"
+                  >
+                    <Slider.Track className="relative h-[3px] flex-1 rounded-full bg-border">
+                      <Slider.Range className="absolute h-full rounded-full bg-accent/60" />
+                    </Slider.Track>
+                    <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+                  </Slider.Root>
+                  <NumberInput
+                    value={localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0}
+                    onCommit={(v) => handleParamChange('control', 'upright_velocity_threshold', String(v))}
+                    className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
