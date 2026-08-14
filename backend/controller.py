@@ -285,9 +285,15 @@ class LQRController(Controller):
                 )
             )
 
-            M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w
-            M12 = I_w
-            M22 = I_w
+            # Extract electro-mechanical parameters (needed for reflected inertia)
+            N = sim_params.gear_ratio
+
+            # Effective wheel-side inertia including reflected rotor (matches simulation.py)
+            I_w_eff = I_w + sim_params.motor_rotor_inertia * N ** 2
+
+            M11 = I_p + sim_params.wheel_mass * sim_params.pendulum_length ** 2 + I_w_eff
+            M12 = I_w_eff
+            M22 = I_w_eff
             det = M11 * M22 - M12 ** 2
 
             if det <= 0.0:
@@ -297,15 +303,13 @@ class LQRController(Controller):
                 (sim_params.pendulum_mass * l_com + sim_params.wheel_mass * sim_params.pendulum_length)
                 * sim_params.gravity
             )
-
-            # Extract electro-mechanical parameters
-            N = sim_params.gear_ratio
             Kt = sim_params.motor_constant
             Ke = sim_params.motor_constant  # Kt = Ke by convention
             R = sim_params.motor_resistance
             L = sim_params.motor_inductance
             b = sim_params.damping
             b_w_eff = sim_params.wheel_damping + N ** 2 * sim_params.motor_viscous_friction
+
 
             # Linearized A matrix for state [theta, theta_dot, phi_dot, i_a]
             # Mechanical rows derived from M @ [theta_ddot, phi_ddot] = f
