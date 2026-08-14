@@ -292,7 +292,8 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
                     ):
                         params_resp = _sim_manager.get_params()
                         await _ws_manager.broadcast_params(params_resp.model_dump())
-                except (ValueError, KeyError) as exc:
+                except Exception as exc:
+                    logger.exception("Unhandled error processing WebSocket command")
                     await websocket.send_bytes(
                         msgpack.packb({"t": 2, "error": str(exc)}, use_bin_type=True)
                     )
