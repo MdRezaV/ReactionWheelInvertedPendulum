@@ -86,7 +86,7 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
     ctx.font = '11px Vazirmatn, monospace'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
-    ctx.fillText('θ (rad)', padL + 4, padT + 2)
+    ctx.fillText('θ (°)', padL + 4, padT + 2)
     ctx.fillText('زمان (s)', padL + plotW - 50, h - 16)
 
     if (!timeData || !thetaData || timeData.length < 2) {
@@ -98,9 +98,12 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
       return
     }
 
+    const RAD2DEG = 180 / Math.PI
+    const thetaDeg = thetaData.map(v => v * RAD2DEG)
+
     const tMax = Math.max(...timeData, 1)
-    const thMin = Math.min(...thetaData, -0.1)
-    const thMax = Math.max(...thetaData, 0.1)
+    const thMin = Math.min(...thetaDeg, -5)
+    const thMax = Math.max(...thetaDeg, 5)
     const thRange = thMax - thMin || 1
 
     const toX = (t) => padL + (t / tMax) * plotW
@@ -112,7 +115,7 @@ export default function TuningTab({ send, tuningProgress, tuningResponse }) {
     ctx.beginPath()
     for (let i = 0; i < timeData.length; i++) {
       const x = toX(timeData[i])
-      const y = toY(thetaData[i])
+      const y = toY(thetaDeg[i])
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }

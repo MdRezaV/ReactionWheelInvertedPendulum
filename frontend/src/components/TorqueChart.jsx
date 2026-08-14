@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { toPersianDigits } from '../utils/format'
 
+const RAD2DEG = 180 / Math.PI
+
 const SERIES = [
-  { key: 'voltage', label: 'ولتاژ', color: '#eb5757' },
-  { key: 'current', label: 'جریان', color: '#bb86fc' },
-  { key: 'phi_dot', label: 'سرعت چرخ', color: '#4dd0b8' },
+  { key: 'voltage', label: 'ولتاژ', color: '#eb5757', scale: 1 },
+  { key: 'current', label: 'جریان', color: '#bb86fc', scale: 1 },
+  { key: 'phi_dot', label: 'سرعت چرخ (°/s)', color: '#4dd0b8', scale: RAD2DEG },
 ]
 
 const CHART_HEIGHT = 120
@@ -79,10 +81,11 @@ export default function TorqueChart({ getBuffer }) {
       const tRange = Math.max(tEnd - tStart, 0.001)
 
       for (const series of SERIES) {
+        const sc = series.scale || 1
         let yMin = Infinity
         let yMax = -Infinity
         for (const pt of buffer) {
-          const v = pt[series.key] ?? 0
+          const v = (pt[series.key] ?? 0) * sc
           if (v < yMin) yMin = v
           if (v > yMax) yMax = v
         }
@@ -96,7 +99,7 @@ export default function TorqueChart({ getBuffer }) {
         ctx.beginPath()
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
-          const v = pt[series.key] ?? 0
+          const v = (pt[series.key] ?? 0) * sc
           const x = PADDING.left + ((pt.time - tStart) / tRange) * plotW
           const y = PADDING.top + plotH - ((v - yMin) / yRange) * plotH
           if (i === 0) ctx.moveTo(x, y)

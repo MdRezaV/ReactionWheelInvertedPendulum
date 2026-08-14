@@ -344,14 +344,14 @@ export default function ControlPanel({
             <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-surface/50">
               <label className="text-[13px] text-text-dim font-bold">آستانه سوئیچ به کنترلر تعادل</label>
               <div className="flex flex-col gap-0.5">
-                <label className="text-[12px] text-text-dim/70">زاویه سوئیچ (رادیان)</label>
+                <label className="text-[12px] text-text-dim/70">زاویه سوئیچ (درجه)</label>
                 <div className="flex items-center gap-1.5">
                   <Slider.Root
-                    value={[localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3]}
-                    min={0.05}
-                    max={1.5}
-                    step={0.05}
-                    onValueChange={([v]) => handleParamChange('control', 'upright_angle_threshold', String(v))}
+                    value={[toDegrees(localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3)]}
+                    min={3}
+                    max={86}
+                    step={1}
+                    onValueChange={([v]) => handleParamChange('control', 'upright_angle_threshold', String(toRadians(v)))}
                     dir="rtl"
                     className="relative flex items-center h-4 flex-1 select-none touch-none"
                   >
@@ -361,21 +361,21 @@ export default function ControlPanel({
                     <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
                   </Slider.Root>
                   <NumberInput
-                    value={localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3}
-                    onCommit={(v) => handleParamChange('control', 'upright_angle_threshold', String(v))}
+                    value={toDegrees(localOverrides['upright_angle_threshold'] ?? params?.control?.upright_angle_threshold ?? 0.3)}
+                    onCommit={(v) => handleParamChange('control', 'upright_angle_threshold', String(toRadians(v)))}
                     className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
                   />
                 </div>
               </div>
               <div className="flex flex-col gap-0.5">
-                <label className="text-[12px] text-text-dim/70">سرعت سوئیچ (رادیان/ثانیه)</label>
+                <label className="text-[12px] text-text-dim/70">سرعت سوئیچ (درجه/ثانیه)</label>
                 <div className="flex items-center gap-1.5">
                   <Slider.Root
-                    value={[localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0]}
-                    min={0.1}
-                    max={5.0}
-                    step={0.1}
-                    onValueChange={([v]) => handleParamChange('control', 'upright_velocity_threshold', String(v))}
+                    value={[toDegrees(localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0)]}
+                    min={5}
+                    max={290}
+                    step={5}
+                    onValueChange={([v]) => handleParamChange('control', 'upright_velocity_threshold', String(toRadians(v)))}
                     dir="rtl"
                     className="relative flex items-center h-4 flex-1 select-none touch-none"
                   >
@@ -385,8 +385,8 @@ export default function ControlPanel({
                     <Slider.Thumb className="w-3 h-3 rounded-full bg-accent cursor-pointer shadow-[0_0_8px_rgba(86,204,242,0.5)] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
                   </Slider.Root>
                   <NumberInput
-                    value={localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0}
-                    onCommit={(v) => handleParamChange('control', 'upright_velocity_threshold', String(v))}
+                    value={toDegrees(localOverrides['upright_velocity_threshold'] ?? params?.control?.upright_velocity_threshold ?? 1.0)}
+                    onCommit={(v) => handleParamChange('control', 'upright_velocity_threshold', String(toRadians(v)))}
                     className="w-[80px] px-1.5 py-0.5 text-[13px] font-mono rounded border border-border bg-card text-text-h text-center focus:border-accent focus:outline-none"
                   />
                 </div>

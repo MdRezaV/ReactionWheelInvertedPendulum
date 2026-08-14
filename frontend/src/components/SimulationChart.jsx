@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { toPersianDigits } from '../utils/format'
 
+const RAD2DEG = 180 / Math.PI
+
 const SERIES_CONFIG = [
-  { key: 'theta', label: 'زاویه پاندول', color: '#56ccf2' },
-  { key: 'theta_dot', label: 'سرعت پاندول', color: '#6fcf97' },
-  { key: 'phi_dot', label: 'سرعت چرخ', color: '#f2994a' },
-  { key: 'torque', label: 'گشتاور', color: '#eb5757' },
+  { key: 'theta', label: 'زاویه پاندول (°)', color: '#56ccf2', scale: RAD2DEG },
+  { key: 'theta_dot', label: 'سرعت پاندول (°/s)', color: '#6fcf97', scale: RAD2DEG },
+  { key: 'phi_dot', label: 'سرعت چرخ (°/s)', color: '#f2994a', scale: RAD2DEG },
+  { key: 'torque', label: 'گشتاور', color: '#eb5757', scale: 1 },
 ]
 
 const CHART_HEIGHT = 130
@@ -80,10 +82,11 @@ export default function SimulationChart({ getBuffer }) {
       const tRange = Math.max(tEnd - tStart, 0.001)
 
       for (const series of SERIES_CONFIG) {
+        const sc = series.scale || 1
         let yMin = Infinity
         let yMax = -Infinity
         for (const pt of buffer) {
-          const v = pt[series.key]
+          const v = (pt[series.key] ?? 0) * sc
           if (v < yMin) yMin = v
           if (v > yMax) yMax = v
         }
@@ -97,8 +100,9 @@ export default function SimulationChart({ getBuffer }) {
         ctx.beginPath()
         for (let i = 0; i < buffer.length; i++) {
           const pt = buffer[i]
+          const v = (pt[series.key] ?? 0) * sc
           const x = PADDING.left + ((pt.time - tStart) / tRange) * plotW
-          const y = PADDING.top + plotH - ((pt[series.key] - yMin) / yRange) * plotH
+          const y = PADDING.top + plotH - ((v - yMin) / yRange) * plotH
           if (i === 0) ctx.moveTo(x, y)
           else ctx.lineTo(x, y)
         }
