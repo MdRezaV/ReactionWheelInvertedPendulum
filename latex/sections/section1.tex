@@ -1,0 +1,386 @@
+\section{مدل ریاضی سیستم}
+\label{sec:system-math}
+
+در این بخش، مدل ریاضی کامل سیستم پاندول معکوس با چرخ واکنشی را استخراج می‌کنیم. این سیستم یک نمونه کلاسیک از مسائل کنترل غیرخطی است که در آن، پایداری پاندول از طریق گشتاور واکنشی ایجادشده توسط یک چرخ دوار تأمین می‌شود. مدل نهایی یک دستگاه معادلات دیفرانسیل معمولی مرتبه پنجم است که هم‌زمان دینامیک مکانیکی و الکتریکی سیستم را توصیف می‌کند.
+
+\subsection{نگاه کلی به سیستم و متغیرهای حالت}
+
+سیستم مورد بررسی شامل یک بازوی پاندول صلب است که در انتهای آن، یک چرخ واکنشی (فلایویل) نصب شده است. این چرخ از طریق یک موتور \LR{DC} و جعبه‌دنده به بازو متصل است. با شتاب‌دهی یا کاهش سرعت چرخ، گشتاور واکنشی به بدنه پاندول وارد می‌شود و امکان کنترل زاویه پاندول فراهم می‌گردد.
+
+مدل کامل سیستم شامل دو زیرسیستم جفت‌شده است:
+
+\begin{itemize}
+    \item \textbf{زیرسیستم مکانیکی:} بازوی پاندول و چرخ واکنشی، توصیف‌شده با یک ماتریس اینرسی کوپل $2 \times 2$.
+    \item \textbf{زیرسیستم الکتریکی:} مدار آرمیچر موتور \LR{DC} شامل مقاومت، سلف‌گذاری و نیروی ضد محرکه الکتریکی (بک-\LR{EMF}).
+\end{itemize}
+
+بردار حالت سیستم به صورت زیر تعریف می‌شود:
+
+\begin{equation}
+    \mathbf{x} = \begin{bmatrix} \theta & \dot{\theta} & \varphi & \dot{\varphi} & i_a \end{bmatrix}^\top
+\end{equation}
+
+\noindent که در آن:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{متغیر} & \textbf{نماد} & \textbf{توضیح} \\
+\midrule
+زاویه پاندول & $\theta$ & زاویه نسبت به وضعیت عمودی ($\theta = 0$ در حالت عمودی) \\
+سرعت زاویه‌ای پاندول & $\dot{\theta}$ & نرخ تغییرات $\theta$ \\
+زاویه چرخ & $\varphi$ & زاویه چرخ نسبت به بازوی پاندول \\
+سرعت زاویه‌ای چرخ & $\dot{\varphi}$ & نرخ تغییرات $\varphi$ (نسبی) \\
+جریان آرمیچر & $i_a$ & جریان مدار آرمیچر موتور \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{پارامترهای فیزیکی}
+
+پارامترهای سیستم در چهار گروه دسته‌بندی می‌شوند. مقادیر پیش‌فرض در جدول‌های زیر آمده است.
+
+\subsubsection{پارامترهای پاندول}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{پارامتر} & \textbf{نماد} & \textbf{مقدار پیش‌فرض} & \textbf{واحد} \\
+\midrule
+جرم پاندول & $m_p$ & $0.4$ & \LR{kg} \\
+طول پاندول & $L_p$ & $0.3$ & \LR{m} \\
+فاصله مرکز جرم از محور & $l_{cm}$ & $L_p / 2$ & \LR{m} \\
+ممان اینرسی حول محور & $I_p$ & $\frac{1}{3} m_p L_p^2$ & \LR{kg·m²} \\
+ضریب میرایی محور & $b$ & $0.001$ & \LR{N·m·s/rad} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{پارامترهای چرخ واکنشی}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{پارامتر} & \textbf{نماد} & \textbf{مقدار پیش‌فرض} & \textbf{واحد} \\
+\midrule
+جرم چرخ & $m_w$ & $0.25$ & \LR{kg} \\
+شعاع داخلی چرخ & $r_i$ & $0.02$ & \LR{m} \\
+شعاع خارجی چرخ & $r_o$ & $0.07$ & \LR{m} \\
+ممان اینرسی چرخ & $I_w$ & $\frac{1}{2} m_w(r_o^2 + r_i^2)$ & \LR{kg·m²} \\
+میرایی چرخ & $b_w$ & $0.0005$ & \LR{N·m·s/rad} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{پارامترهای موتور و جعبه‌دنده}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{پارامتر} & \textbf{نماد} & \textbf{مقدار پیش‌فرض} & \textbf{واحد} \\
+\midrule
+نسبت تبدیل جعبه‌دنده & $N$ & $4.0$ & --- \\
+ثابت گشتاور / بک-\LR{EMF} & $K_t = K_e$ & $0.0876$ & \LR{N·m/A = V·s/rad} \\
+مقاومت آرمیچر & $R_a$ & $1.2$ & $\Omega$ \\
+سلف‌گذاری آرمیچر & $L_a$ & $0.0005$ & \LR{H} \\
+ممان اینرسی روتور & $J_r$ & $5 \times 10^{-5}$ & \LR{kg·m²} \\
+اصطکاک ویسکوز موتور & $b_m$ & $0.001$ & \LR{N·m·s/rad} \\
+حداکثر ولتاژ & $V_{max}$ & $12.0$ & \LR{V} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{پارامترهای محیطی و عددی}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{پارامتر} & \textbf{نماد} & \textbf{مقدار پیش‌فرض} & \textbf{واحد} \\
+\midrule
+شتاب گرانش & $g$ & $9.81$ & \LR{m/s²} \\
+گام زمانی انتگرال‌گیری & $\Delta t$ & $0.001$ & \LR{s} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{کمیت‌های مشتق‌شده}
+
+پیش از استخراج معادلات حرکت، چند کمیت مشتق‌شده را تعریف می‌کنیم که نقش محوری در ساده‌سازی روابط دارند.
+
+\subsubsection{اینرسی مؤثر سمت چرخ}
+
+ممان اینرسی روتور موتور از طریق جعبه‌دنده به سمت چرخ بازتاب داده می‌شود:
+
+\begin{equation}
+    I_{w,\text{eff}} = I_w + J_r \, N^2
+\end{equation}
+
+\subsubsection{میرایی مؤثر سمت چرخ}
+
+به طور مشابه، اصطکاک ویسکوز موتور نیز به سمت چرخ منتقل می‌شود:
+
+\begin{equation}
+    b_{w,\text{eff}} = b_w + b_m \, N^2
+\end{equation}
+
+\subsubsection{ماتریس اینرسی کوپل}
+
+ماتریس اینرسی $2 \times 2$ برای مختصات تعمیم‌یافته $(\theta, \varphi)$ به صورت زیر است:
+
+\begin{equation}
+    \mathbf{M} = \begin{bmatrix} M_{11} & M_{12} \\ M_{12} & M_{22} \end{bmatrix}
+\end{equation}
+
+\noindent که درایه‌های آن عبارتند از:
+
+\begin{align}
+    M_{11} &= I_p + m_w L_p^2 + I_{w,\text{eff}} \\
+    M_{12} &= I_{w,\text{eff}} \\
+    M_{22} &= I_{w,\text{eff}}
+\end{align}
+
+دترمینان این ماتریس برابر است با:
+
+\begin{equation}
+    \det(\mathbf{M}) = M_{11} M_{22} - M_{12}^2 > 0
+\end{equation}
+
+این کمیت باید اکیداً مثبت باشد تا سیستم از نظر فیزیکی معتبر باقی بماند.
+
+\subsubsection{ضریب گرانشی}
+
+ضریب گشتاور گرانشی ترکیبی به صورت زیر تعریف می‌شود:
+
+\begin{equation}
+    G = (m_p \, l_{cm} + m_w \, L_p) \, g
+\end{equation}
+
+این ضریب، اثر هم‌زمان جرم پاندول و جرم چرخ را در گشتاور گرانشی حول محور خلاصه می‌کند.
+
+\subsection{معادلات حرکت}
+
+\subsubsection{دینامیک مکانیکی (سیستم کوپل $2 \times 2$)}
+
+معادلات حرکت مکانیکی از مکانیک لاگرانژی استخراج می‌شوند. موتور گشتاور الکترومغناطیسی $\tau_m = K_t \, i_a$ تولید می‌کند که از طریق جعبه‌دنده به صورت $\tau_w = N \, K_t \, i_a$ به چرخ منتقل می‌شود.
+
+دستگاه معادلات به شکل ماتریسی زیر نوشته می‌شود:
+
+\begin{equation}
+    \mathbf{M} \begin{bmatrix} \ddot{\theta} \\ \ddot{\varphi} \end{bmatrix} = \begin{bmatrix} f_1 \\ f_2 \end{bmatrix}
+\end{equation}
+
+\noindent که در آن، نیروهای سمت راست برابرند با:
+
+\begin{align}
+    f_1 &= G \sin\theta - \tau_w - b\,\dot{\theta} + \tau_{\text{ext}} \\
+    f_2 &= \tau_w - b_{w,\text{eff}} \, \dot{\varphi}
+\end{align}
+
+در این روابط، $\tau_{\text{ext}}$ گشتاور اغتشاش خارجی است که به بدنه پاندول اعمال می‌شود.
+
+با استفاده از قاعده کرامر، شتاب‌های زاویه‌ای به دست می‌آیند:
+
+\begin{align}
+    \ddot{\theta} &= \frac{M_{22}\, f_1 - M_{12}\, f_2}{\det(\mathbf{M})} \\[6pt]
+    \ddot{\varphi} &= \frac{M_{11}\, f_2 - M_{12}\, f_1}{\det(\mathbf{M})}
+\end{align}
+
+این روابط نشان می‌دهند که شتاب پاندول و شتاب چرخ به دلیل وجود درایه‌های غیرقطری $M_{12}$، به یکدیگر کوپل هستند. به بیان دیگر، اعمال گشتاور به چرخ، هم‌زمان بر حرکت پاندول و چرخ اثر می‌گذارد.
+
+\subsubsection{دینامیک الکتریکی (مدار آرمیچر)}
+
+مدار آرمیچر موتور \LR{DC} از قانون ولتاژ کیریشهف پیروی می‌کند:
+
+\begin{equation}
+    L_a \frac{di_a}{dt} = V - R_a\, i_a - K_e \, N \, \dot{\varphi}
+\end{equation}
+
+\noindent که در آن:
+\begin{itemize}
+    \item $V$ ولتاژ اعمال‌شده به آرمیچر است (محدودشده به بازه $[-V_{max},\, V_{max}]$)،
+    \item $R_a\, i_a$ افت ولتاژ مقاومتی است،
+    \item $K_e \, N \, \dot{\varphi}$ بک-\LR{EMF} است که متناسب با سرعت چرخ از طریق جعبه‌دنده می‌باشد.
+\end{itemize}
+
+بنابراین:
+
+\begin{equation}
+    \frac{di_a}{dt} = \frac{V - R_a\, i_a - K_e \, N \, \dot{\varphi}}{L_a}
+\end{equation}
+
+\subsubsection{فرم کامل فضای حالت}
+
+با ترکیب معادلات مکانیکی و الکتریکی، مشتق بردار حالت پنج‌بعدی به صورت زیر نوشته می‌شود:
+
+\begin{equation}
+    \dot{\mathbf{x}} = \begin{bmatrix} \dot{\theta} \\ \ddot{\theta} \\ \dot{\varphi} \\ \ddot{\varphi} \\ \dot{i}_a \end{bmatrix}
+    = \begin{bmatrix}
+        x_2 \\[4pt]
+        \dfrac{M_{22}\, f_1 - M_{12}\, f_2}{\det(\mathbf{M})} \\[8pt]
+        x_4 \\[4pt]
+        \dfrac{M_{11}\, f_2 - M_{12}\, f_1}{\det(\mathbf{M})} \\[8pt]
+        \dfrac{V - R_a\, x_5 - K_e N\, x_4}{L_a}
+    \end{bmatrix}
+\end{equation}
+
+\noindent با:
+
+\begin{align}
+    f_1 &= G \sin(x_1) - N K_t\, x_5 - b\, x_2 + \tau_{\text{ext}} \\
+    f_2 &= N K_t\, x_5 - b_{w,\text{eff}}\, x_4
+\end{align}
+
+این دستگاه، مدل کامل غیرخطی سیستم را تشکیل می‌دهد و مبنای شبیه‌سازی عددی در گام‌های بعدی قرار می‌گیرد.
+
+\subsection{انتگرال‌گیری عددی — روش رونگه‌کوتای مرتبه پنجم}
+
+برای انتگرال‌گیری عددی دستگاه معادلات فوق، از روش رونگه‌کوتای شش‌مرحله‌ای مرتبه پنجم (بوتچر) استفاده می‌شود. این روش در مقایسه با روش کلاسیک \LR{RK4}، دقت بالاتر و پایستگی انرژی بهتری در بازه‌های زمانی طولانی ارائه می‌دهد.
+
+\subsubsection{جدول بوتچر}
+
+\begin{equation}
+    \begin{array}{c|cccccc}
+    0 & & & & & & \\
+    \frac{1}{4} & \frac{1}{4} & & & & & \\
+    \frac{1}{4} & \frac{1}{8} & \frac{1}{8} & & & & \\
+    \frac{1}{2} & 0 & -\frac{1}{2} & 1 & & & \\
+    \frac{3}{4} & \frac{3}{16} & 0 & 0 & \frac{9}{16} & & \\
+    1 & -\frac{3}{7} & \frac{2}{7} & \frac{12}{7} & -\frac{12}{7} & \frac{8}{7} & \\
+    \hline
+    & \frac{7}{90} & 0 & \frac{32}{90} & \frac{12}{90} & \frac{32}{90} & \frac{7}{90}
+    \end{array}
+\end{equation}
+
+\subsubsection{الگوریتم گام}
+
+با فرض حالت $\mathbf{x}_n$ در زمان $t_n$ و گام $h = \Delta t$، شش مرحله به صورت زیر محاسبه می‌شوند:
+
+\begin{align}
+    \mathbf{k}_1 &= f(\mathbf{x}_n,\; V) \\
+    \mathbf{k}_2 &= f\!\left(\mathbf{x}_n + \tfrac{h}{4}\mathbf{k}_1,\; V\right) \\
+    \mathbf{k}_3 &= f\!\left(\mathbf{x}_n + \tfrac{h}{8}(\mathbf{k}_1 + \mathbf{k}_2),\; V\right) \\
+    \mathbf{k}_4 &= f\!\left(\mathbf{x}_n + h(-\tfrac{1}{2}\mathbf{k}_2 + \mathbf{k}_3),\; V\right) \\
+    \mathbf{k}_5 &= f\!\left(\mathbf{x}_n + h(\tfrac{3}{16}\mathbf{k}_1 + \tfrac{9}{16}\mathbf{k}_4),\; V\right) \\
+    \mathbf{k}_6 &= f\!\left(\mathbf{x}_n + h(-\tfrac{3}{7}\mathbf{k}_1 + \tfrac{2}{7}\mathbf{k}_2 + \tfrac{12}{7}\mathbf{k}_3 - \tfrac{12}{7}\mathbf{k}_4 + \tfrac{8}{7}\mathbf{k}_5),\; V\right)
+\end{align}
+
+به‌روزرسانی حالت:
+
+\begin{equation}
+    \mathbf{x}_{n+1} = \mathbf{x}_n + \frac{h}{90}\left(7\mathbf{k}_1 + 32\mathbf{k}_3 + 12\mathbf{k}_4 + 32\mathbf{k}_5 + 7\mathbf{k}_6\right)
+\end{equation}
+
+پس از هر گام، زوایای $\theta$ و $\varphi$ به بازه $(-\pi,\, \pi]$ محدود می‌شوند.
+
+\subsubsection{نکات پیاده‌سازی}
+
+در پیاده‌سازی عددی، بافرهای شش مرحله ($\mathbf{k}_1$ تا $\mathbf{k}_6$) و یک بافر موقت، از پیش تخصیص داده می‌شوند تا از تخصیص حافظه در هر گام جلوگیری شود. تابع دینامیک نتایج را مستقیماً در آرایه خروجی از پیش تخصیص‌یافته می‌نویسد و ولتاژ پیش از ورود به انتگرال‌گیر به بازه $[-V_{max},\, V_{max}]$ محدود می‌شود.
+
+\subsection{محاسبات انرژی}
+
+\subsubsection{انرژی جنبشی}
+
+\begin{equation}
+    T = \frac{1}{2} \begin{bmatrix} \dot{\theta} & \dot{\varphi} \end{bmatrix} \mathbf{M} \begin{bmatrix} \dot{\theta} \\ \dot{\varphi} \end{bmatrix}
+    = \frac{1}{2}\left(M_{11}\dot{\theta}^2 + 2M_{12}\dot{\theta}\dot{\varphi} + M_{22}\dot{\varphi}^2\right)
+\end{equation}
+
+\subsubsection{انرژی پتانسیل}
+
+انرژی پتانسیل نسبت به وضعیت عمودی ($\theta = 0$) مرجع‌دهی می‌شود:
+
+\begin{equation}
+    U = G(\cos\theta - 1)
+\end{equation}
+
+در وضعیت عمودی $U = 0$ و در پایین‌تر از آن $U < 0$ است.
+
+\subsubsection{انرژی مکانیکی کل}
+
+\begin{equation}
+    E = T + U
+\end{equation}
+
+\subsubsection{تکانه زاویه‌ای}
+
+تکانه زاویه‌ای کل حول محور:
+
+\begin{equation}
+    \mathcal{L} = M_{11}\dot{\theta} + M_{12}\dot{\varphi}
+\end{equation}
+
+\subsection{کنترلرها}
+
+تمام کنترلرها یک فرمان ولتاژ $V \in [-V_{\max},\, V_{\max}]$ تولید می‌کنند. فیزیک موتور و جعبه‌دنده به‌صورت داخلی این ولتاژ را از طریق دینامیک آرمیچر به گشتاور چرخ تبدیل می‌کند و کنترلرها هرگز مستقیماً گشتاور محاسبه نمی‌کنند.
+
+دسته‌بندی کنترلرهای موجود در این پروژه عبارت است از:
+
+\begin{itemize}
+    \item \textbf{کنترلر \LR{PID}}: کنترلر کلاسیک بالانس با بهره‌های تناسبی، انتگرالی و مشتقی.
+    \item \textbf{کنترلر \LR{LQR}}: تنظیم‌کننده خطی-درجه‌دو بر پایه مدل خطی‌شده چهارحالته شامل دینامیک الکتریکی.
+    \item \textbf{بالاآوردن انرژی}: استراتژی آستروم--فوروتا مبتنی بر پمپاژ انرژی پاندول تا رسیدن به ناحیه عمودی.
+    \item \textbf{بالاآوردن با خطی‌سازی بازخورد جزئی (\LR{PFL})}: شکل‌دهی شتاب مطلوب پاندول از طریق معکوس‌سازی دینامیک کوپل‌شده.
+    \item \textbf{بالاآوردن ضربه‌ای سرعت‌صفر}: اعمال پالس ولتاژ در عبورهای صفر سرعت پاندول.
+    \item \textbf{کنترلر مد لغزشی (\LR{SMC})}: کنترلر مقاوم با هموارسازی لایه مرزی برای کاهش چترینگ.
+\end{itemize}
+
+توضیحات دقیق، روابط ریاضی و جزئیات طراحی کنترلرهای بالانس در بخش~\ref{sec:controllers} و الگوریتم‌های بالاآوردن در بخش ۳ ارائه شده است.
+
+\subsection{مدل اغتشاش}
+
+اغتشاش‌های خارجی به دو شکل قابل اعمال هستند:
+
+\begin{itemize}
+    \item \textbf{کانال گشتاور:} گشتاور افزایشی $\tau_{\text{ext}}$ بر بدنه پاندول (وارد $f_1$ می‌شود).
+    \item \textbf{کانال ولتاژ:} آفست ولتاژ افزایشی بر فرمان موتور.
+\end{itemize}
+
+شکل‌موج‌های پشتیبانی‌شده: ثابت، سینوسی، پالس، دندانه‌ارّه‌ای و نویز گاوسی.
+
+\subsection{خروجی‌های تله‌متری}
+
+در هر گام فیزیکی، کمیت‌های زیر برای تله‌متری محاسبه می‌شوند:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{کمیت} & \textbf{رابطه} \\
+\midrule
+بک-\LR{EMF} & $K_e \, N \, \dot{\varphi}$ \\
+گشتاور موتور & $K_t \, i_a$ \\
+گشتاور چرخ & $N \, K_t \, i_a$ \\
+انرژی جنبشی & $\frac{1}{2}(M_{11}\dot{\theta}^2 + 2M_{12}\dot{\theta}\dot{\varphi} + M_{22}\dot{\varphi}^2)$ \\
+انرژی پتانسیل & $G(\cos\theta - 1)$ \\
+تکانه زاویه‌ای & $M_{11}\dot{\theta} + M_{12}\dot{\varphi}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{محدودسازی زاویه}
+
+پس از هر گام انتگرال‌گیری، زوایای $\theta$ و $\varphi$ به بازه $(-\pi,\, \pi]$ محدود می‌شوند:
+
+\begin{equation}
+    \alpha_{\text{wrapped}} = \left((\alpha + \pi) \mod 2\pi\right) - \pi
+\end{equation}
+
+این عملیات از رشد نامحدود زاویه جلوگیری می‌کند و هم‌زمان حالت فیزیکی سیستم را حفظ می‌نماید.
+
+\subsection{جمع‌بندی}
+
+سیستم پاندول معکوس با چرخ واکنشی، یک سیستم الکترومکانیکی پنج‌حالته است که شامل موارد زیر می‌شود:
+
+\begin{enumerate}
+    \item مکانیک اجسام صلب کوپل‌شده (ماتریس اینرسی $2 \times 2$ برای پاندول و چرخ)،
+    \item دینامیک الکتریکی موتور \LR{DC} (مدار آرمیچر با بک-\LR{EMF})،
+    \item انتقال جعبه‌دنده (بازتاب اینرسی روتور و اصطکاک به سمت چرخ)،
+    \item چندین استراتژی کنترل (\LR{PID}، \LR{LQR}، بالاآوردن انرژی، \LR{PFL}، مد لغزشی).
+\end{enumerate}
+
+انتگرال‌گیری عددی با روش رونگه‌کوتای مرتبه پنجم و در فرکانس $1$ کیلوهرتز انجام می‌شود که دقت مناسب و پایداری عددی لازم برای شبیه‌سازی بلادرنگ تعاملی را فراهم می‌آورد.

@@ -1,0 +1,78 @@
+% !TEX TS-program = xelatex
+\documentclass[12pt,a4paper]{article}
+
+%% ─── Font & Encoding ───────────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage{xepersian}
+
+% Persian font
+\settextfont{XB Niloofar}
+\setdigitfont{XB Niloofar}
+
+% English / Latin font
+\setlatintextfont{Times New Roman}
+
+%% ─── Page Layout ───────────────────────────────────────────────────
+\usepackage[top=2.5cm, bottom=2.5cm, right=2.5cm, left=2.5cm]{geometry}
+
+%% ─── Packages ──────────────────────────────────────────────────────
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\usepackage{fancyhdr}
+\usepackage{float}
+
+%% ─── Hyperref Config ───────────────────────────────────────────────
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=green!50!black,
+    urlcolor=blue!60!black,
+    pdftitle={شبیه‌سازی پاندول معکوس با چرخ واکنشی},
+    pdfauthor={محمدرضا ولیخانی}
+}
+
+%% ─── Header / Footer ───────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\fancyhead[L]{شبیه‌سازی پاندول معکوس}
+\renewcommand{\headrulewidth}{0.4pt}
+
+%% ─── Section Styling ───────────────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\section}
+  {\Large\bfseries}
+  {\thesection}{1em}{}
+\titleformat{\subsection}
+  {\large\bfseries}
+  {\thesubsection}{1em}{}
+
+%% ─── Custom Commands ───────────────────────────────────────────────
+\newcommand{\authorname}{محمدرضا ولیخانی}
+\newcommand{\doctitle}{شبیه‌سازی پاندول معکوس با چرخ واکنشی}
+
+%% ─── Document ──────────────────────────────────────────────────────
+\begin{document}
+
+% Title page
+\input{titlepage}
+
+% Table of contents
+\tableofcontents
+\newpage
+
+% Sections
+\input{sections/section1}
+\newpage
+\input{sections/section2}
+\newpage
+\input{sections/section3}
+\newpage
+\input{sections/section4}
+
+\end{document}
