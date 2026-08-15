@@ -70,63 +70,67 @@
 \contentsline {subsection}{\numberline {3.3}بالاآوردن با خطی‌سازی بازخورد جزئی}{29}{subsection.3.3}%
 \contentsline {subsubsection}{\numberline {3.3.1}شهود فیزیکی}{29}{subsubsection.3.3.1}%
 \contentsline {subsubsection}{\numberline {3.3.2}شتاب مطلوب پاندول}{30}{subsubsection.3.3.2}%
-\contentsline {subsubsection}{\numberline {3.3.3}معکوس‌سازی دینامیک}{30}{subsubsection.3.3.3}%
-\contentsline {subsubsection}{\numberline {3.3.4}نگاشت گشتاور و ولتاژ}{30}{subsubsection.3.3.4}%
-\contentsline {subsubsection}{\numberline {3.3.5}اشباع آگاه از انرژی}{30}{subsubsection.3.3.5}%
-\contentsline {subsection}{\numberline {3.4}بالاآوردن ضربه‌ای در سرعت صفر}{31}{subsection.3.4}%
-\contentsline {subsubsection}{\numberline {3.4.1}شهود فیزیکی}{31}{subsubsection.3.4.1}%
-\contentsline {subsubsection}{\numberline {3.4.2}تشخیص عبور از صفر}{31}{subsubsection.3.4.2}%
-\contentsline {subsubsection}{\numberline {3.4.3}قانون ضربه}{31}{subsubsection.3.4.3}%
-\contentsline {subsubsection}{\numberline {3.4.4}قطع ایمنی}{31}{subsubsection.3.4.4}%
-\contentsline {subsection}{\numberline {3.5}انتقال به کنترل تعادلی}{31}{subsection.3.5}%
-\contentsline {subsection}{\numberline {3.6}قیدهای ایمنی سراسری}{32}{subsection.3.6}%
-\contentsline {subsection}{\numberline {3.7}خلاصه پارامترها}{32}{subsection.3.7}%
-\contentsline {subsection}{\numberline {3.8}انتخاب حالت}{32}{subsection.3.8}%
-\contentsline {section}{\numberline {4}راهنمای تنظیم بهره‌ها}{34}{section.4}%
-\contentsline {subsection}{\numberline {4.1}دینامیک سامانه}{34}{subsection.4.1}%
-\contentsline {subsubsection}{\numberline {4.1.1}زیرسامانه مکانیکی}{34}{subsubsection.4.1.1}%
-\contentsline {subsubsection}{\numberline {4.1.2}زیرسامانه الکتریکی}{35}{subsubsection.4.1.2}%
-\contentsline {subsubsection}{\numberline {4.1.3}اثر پارامترهای فیزیکی بر دینامیک}{35}{subsubsection.4.1.3}%
-\contentsline {subsection}{\numberline {4.2}کنترلر PID بالانس}{35}{subsection.4.2}%
-\contentsline {subsubsection}{\numberline {4.2.1}قانون کنترل}{35}{subsubsection.4.2.1}%
-\contentsline {subsubsection}{\numberline {4.2.2}نقش هر بهره}{35}{subsubsection.4.2.2}%
-\contentsline {subsubsection}{\numberline {4.2.3}مکانیزم ضد باد-up}{36}{subsubsection.4.2.3}%
-\contentsline {subsubsection}{\numberline {4.2.4}رویه تنظیم}{36}{subsubsection.4.2.4}%
-\contentsline {subsection}{\numberline {4.3}کنترلر LQR بالانس}{37}{subsection.4.3}%
-\contentsline {subsubsection}{\numberline {4.3.1}خطی‌سازی}{37}{subsubsection.4.3.1}%
-\contentsline {subsubsection}{\numberline {4.3.2}قانون کنترل بهینه}{37}{subsubsection.4.3.2}%
-\contentsline {subsubsection}{\numberline {4.3.3}تفسیر ماتریس وزن‌دهی}{38}{subsubsection.4.3.3}%
-\contentsline {subsubsection}{\numberline {4.3.4}رویه تنظیم}{38}{subsubsection.4.3.4}%
-\contentsline {subsection}{\numberline {4.4}کنترلر بالاآوردن مبتنی بر انرژی}{38}{subsection.4.4}%
-\contentsline {subsubsection}{\numberline {4.4.1}انرژی پاندول}{38}{subsubsection.4.4.1}%
-\contentsline {subsubsection}{\numberline {4.4.2}قانون پمپاژ انرژی}{39}{subsubsection.4.4.2}%
-\contentsline {subsubsection}{\numberline {4.4.3}اثر بهره‌ها}{39}{subsubsection.4.4.3}%
-\contentsline {subsubsection}{\numberline {4.4.4}مکانیزم‌های ایمنی}{39}{subsubsection.4.4.4}%
-\contentsline {subsubsection}{\numberline {4.4.5}رویه تنظیم}{39}{subsubsection.4.4.5}%
-\contentsline {subsection}{\numberline {4.5}بالاآوردن با خطی‌سازی بازخورد جزئی}{40}{subsection.4.5}%
-\contentsline {subsubsection}{\numberline {4.5.1}شتاب مطلوب}{40}{subsubsection.4.5.1}%
-\contentsline {subsubsection}{\numberline {4.5.2}خطی‌سازی بازخورد}{40}{subsubsection.4.5.2}%
-\contentsline {subsubsection}{\numberline {4.5.3}نگاشت ولتاژ شبه‌ایستا}{40}{subsubsection.4.5.3}%
-\contentsline {subsubsection}{\numberline {4.5.4}اثر بهره‌ها}{40}{subsubsection.4.5.4}%
-\contentsline {subsubsection}{\numberline {4.5.5}اشباع انرژی-آگاه}{40}{subsubsection.4.5.5}%
-\contentsline {subsubsection}{\numberline {4.5.6}رویه تنظیم}{41}{subsubsection.4.5.6}%
-\contentsline {subsection}{\numberline {4.6}بالاآوردن با ضربه در سرعت صفر}{41}{subsection.4.6}%
-\contentsline {subsubsection}{\numberline {4.6.1}مکانیزم عملکرد}{41}{subsubsection.4.6.1}%
-\contentsline {subsubsection}{\numberline {4.6.2}پارامترها}{41}{subsubsection.4.6.2}%
-\contentsline {subsubsection}{\numberline {4.6.3}مکانیزم‌های ایمنی}{41}{subsubsection.4.6.3}%
-\contentsline {subsubsection}{\numberline {4.6.4}تنظیم}{41}{subsubsection.4.6.4}%
-\contentsline {subsection}{\numberline {4.7}کنترلر مد لغزشی}{42}{subsection.4.7}%
-\contentsline {subsubsection}{\numberline {4.7.1}سطح لغزش}{42}{subsubsection.4.7.1}%
-\contentsline {subsubsection}{\numberline {4.7.2}قانون کنترل با لایه مرزی}{42}{subsubsection.4.7.2}%
-\contentsline {subsubsection}{\numberline {4.7.3}نقش بهره‌ها}{42}{subsubsection.4.7.3}%
-\contentsline {subsubsection}{\numberline {4.7.4}دینامیک روی سطح لغزش}{42}{subsubsection.4.7.4}%
-\contentsline {subsubsection}{\numberline {4.7.5}رویه تنظیم}{43}{subsubsection.4.7.5}%
-\contentsline {subsection}{\numberline {4.8}آستانه تحویل بالانس}{43}{subsection.4.8}%
-\contentsline {subsubsection}{\numberline {4.8.1}شرط سوئیچ}{43}{subsubsection.4.8.1}%
-\contentsline {subsubsection}{\numberline {4.8.2}پارامترها و تنظیم}{43}{subsubsection.4.8.2}%
-\contentsline {subsection}{\numberline {4.9}تعامل بین بهره‌ها}{43}{subsection.4.9}%
-\contentsline {subsubsection}{\numberline {4.9.1}کوپل از طریق اشباع ولتاژ}{43}{subsubsection.4.9.1}%
-\contentsline {subsubsection}{\numberline {4.9.2}مقیاس‌دهی نسبت دنده}{44}{subsubsection.4.9.2}%
-\contentsline {subsubsection}{\numberline {4.9.3}پهنای باند الکتریکی}{44}{subsubsection.4.9.3}%
-\contentsline {subsection}{\numberline {4.10}جدول خلاصه بهره‌ها}{44}{subsection.4.10}%
-\contentsline {subsection}{\numberline {4.11}گردش کار پیشنهادی تنظیم}{45}{subsection.4.11}%
+\contentsline {paragraph}{نقش فیزیکی $k_p^{\text {PFL}}$ (بهره تناسبی).}{30}{equation.76}%
+\contentsline {paragraph}{نقش فیزیکی $k_d^{\text {PFL}}$ (بهره مشتقی).}{30}{equation.76}%
+\contentsline {paragraph}{تنظیم بهره‌ها.}{30}{equation.76}%
+\contentsline {paragraph}{قید شتاب و بررسی عددی.}{31}{Item.14}%
+\contentsline {subsubsection}{\numberline {3.3.3}معکوس‌سازی دینامیک}{31}{subsubsection.3.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.4}نگاشت گشتاور و ولتاژ}{32}{subsubsection.3.3.4}%
+\contentsline {subsubsection}{\numberline {3.3.5}اشباع آگاه از انرژی}{33}{subsubsection.3.3.5}%
+\contentsline {subsection}{\numberline {3.4}بالاآوردن ضربه‌ای در سرعت صفر}{33}{subsection.3.4}%
+\contentsline {subsubsection}{\numberline {3.4.1}شهود فیزیکی}{33}{subsubsection.3.4.1}%
+\contentsline {subsubsection}{\numberline {3.4.2}تشخیص عبور از صفر}{33}{subsubsection.3.4.2}%
+\contentsline {subsubsection}{\numberline {3.4.3}قانون ضربه}{33}{subsubsection.3.4.3}%
+\contentsline {subsubsection}{\numberline {3.4.4}قطع ایمنی}{33}{subsubsection.3.4.4}%
+\contentsline {subsection}{\numberline {3.5}انتقال به کنترل تعادلی}{34}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}قیدهای ایمنی سراسری}{34}{subsection.3.6}%
+\contentsline {subsection}{\numberline {3.7}خلاصه پارامترها}{34}{subsection.3.7}%
+\contentsline {subsection}{\numberline {3.8}انتخاب حالت}{35}{subsection.3.8}%
+\contentsline {section}{\numberline {4}راهنمای تنظیم بهره‌ها}{36}{section.4}%
+\contentsline {subsection}{\numberline {4.1}دینامیک سامانه}{36}{subsection.4.1}%
+\contentsline {subsubsection}{\numberline {4.1.1}زیرسامانه مکانیکی}{36}{subsubsection.4.1.1}%
+\contentsline {subsubsection}{\numberline {4.1.2}زیرسامانه الکتریکی}{37}{subsubsection.4.1.2}%
+\contentsline {subsubsection}{\numberline {4.1.3}اثر پارامترهای فیزیکی بر دینامیک}{37}{subsubsection.4.1.3}%
+\contentsline {subsection}{\numberline {4.2}کنترلر PID بالانس}{37}{subsection.4.2}%
+\contentsline {subsubsection}{\numberline {4.2.1}قانون کنترل}{37}{subsubsection.4.2.1}%
+\contentsline {subsubsection}{\numberline {4.2.2}نقش هر بهره}{37}{subsubsection.4.2.2}%
+\contentsline {subsubsection}{\numberline {4.2.3}مکانیزم ضد باد-up}{38}{subsubsection.4.2.3}%
+\contentsline {subsubsection}{\numberline {4.2.4}رویه تنظیم}{38}{subsubsection.4.2.4}%
+\contentsline {subsection}{\numberline {4.3}کنترلر LQR بالانس}{39}{subsection.4.3}%
+\contentsline {subsubsection}{\numberline {4.3.1}خطی‌سازی}{39}{subsubsection.4.3.1}%
+\contentsline {subsubsection}{\numberline {4.3.2}قانون کنترل بهینه}{39}{subsubsection.4.3.2}%
+\contentsline {subsubsection}{\numberline {4.3.3}تفسیر ماتریس وزن‌دهی}{40}{subsubsection.4.3.3}%
+\contentsline {subsubsection}{\numberline {4.3.4}رویه تنظیم}{40}{subsubsection.4.3.4}%
+\contentsline {subsection}{\numberline {4.4}کنترلر بالاآوردن مبتنی بر انرژی}{40}{subsection.4.4}%
+\contentsline {subsubsection}{\numberline {4.4.1}انرژی پاندول}{40}{subsubsection.4.4.1}%
+\contentsline {subsubsection}{\numberline {4.4.2}قانون پمپاژ انرژی}{41}{subsubsection.4.4.2}%
+\contentsline {subsubsection}{\numberline {4.4.3}اثر بهره‌ها}{41}{subsubsection.4.4.3}%
+\contentsline {subsubsection}{\numberline {4.4.4}مکانیزم‌های ایمنی}{41}{subsubsection.4.4.4}%
+\contentsline {subsubsection}{\numberline {4.4.5}رویه تنظیم}{41}{subsubsection.4.4.5}%
+\contentsline {subsection}{\numberline {4.5}بالاآوردن با خطی‌سازی بازخورد جزئی}{42}{subsection.4.5}%
+\contentsline {subsubsection}{\numberline {4.5.1}شتاب مطلوب}{42}{subsubsection.4.5.1}%
+\contentsline {subsubsection}{\numberline {4.5.2}خطی‌سازی بازخورد}{42}{subsubsection.4.5.2}%
+\contentsline {subsubsection}{\numberline {4.5.3}نگاشت ولتاژ شبه‌ایستا}{42}{subsubsection.4.5.3}%
+\contentsline {subsubsection}{\numberline {4.5.4}اثر بهره‌ها}{42}{subsubsection.4.5.4}%
+\contentsline {subsubsection}{\numberline {4.5.5}اشباع انرژی-آگاه}{42}{subsubsection.4.5.5}%
+\contentsline {subsubsection}{\numberline {4.5.6}رویه تنظیم}{43}{subsubsection.4.5.6}%
+\contentsline {subsection}{\numberline {4.6}بالاآوردن با ضربه در سرعت صفر}{43}{subsection.4.6}%
+\contentsline {subsubsection}{\numberline {4.6.1}مکانیزم عملکرد}{43}{subsubsection.4.6.1}%
+\contentsline {subsubsection}{\numberline {4.6.2}پارامترها}{43}{subsubsection.4.6.2}%
+\contentsline {subsubsection}{\numberline {4.6.3}مکانیزم‌های ایمنی}{43}{subsubsection.4.6.3}%
+\contentsline {subsubsection}{\numberline {4.6.4}تنظیم}{43}{subsubsection.4.6.4}%
+\contentsline {subsection}{\numberline {4.7}کنترلر مد لغزشی}{44}{subsection.4.7}%
+\contentsline {subsubsection}{\numberline {4.7.1}سطح لغزش}{44}{subsubsection.4.7.1}%
+\contentsline {subsubsection}{\numberline {4.7.2}قانون کنترل با لایه مرزی}{44}{subsubsection.4.7.2}%
+\contentsline {subsubsection}{\numberline {4.7.3}نقش بهره‌ها}{44}{subsubsection.4.7.3}%
+\contentsline {subsubsection}{\numberline {4.7.4}دینامیک روی سطح لغزش}{44}{subsubsection.4.7.4}%
+\contentsline {subsubsection}{\numberline {4.7.5}رویه تنظیم}{45}{subsubsection.4.7.5}%
+\contentsline {subsection}{\numberline {4.8}آستانه تحویل بالانس}{45}{subsection.4.8}%
+\contentsline {subsubsection}{\numberline {4.8.1}شرط سوئیچ}{45}{subsubsection.4.8.1}%
+\contentsline {subsubsection}{\numberline {4.8.2}پارامترها و تنظیم}{45}{subsubsection.4.8.2}%
+\contentsline {subsection}{\numberline {4.9}تعامل بین بهره‌ها}{45}{subsection.4.9}%
+\contentsline {subsubsection}{\numberline {4.9.1}کوپل از طریق اشباع ولتاژ}{45}{subsubsection.4.9.1}%
+\contentsline {subsubsection}{\numberline {4.9.2}مقیاس‌دهی نسبت دنده}{46}{subsubsection.4.9.2}%
+\contentsline {subsubsection}{\numberline {4.9.3}پهنای باند الکتریکی}{46}{subsubsection.4.9.3}%
+\contentsline {subsection}{\numberline {4.10}جدول خلاصه بهره‌ها}{46}{subsection.4.10}%
+\contentsline {subsection}{\numberline {4.11}گردش کار پیشنهادی تنظیم}{47}{subsection.4.11}%
