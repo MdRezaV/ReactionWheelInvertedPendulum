@@ -936,26 +936,25 @@ class SwingUpBalanceController(Controller):
         # Rotation / overspeed recovery: when the pendulum has excess energy
         # (enough to go over the top) and is moving fast, apply aggressive
         # braking to shed energy and prevent continuous rotation.
-        # Unlike the previous narrow angle-window governor, this criterion is
-        # physically motivated and works at any pendulum angle, catching the
-        # pendulum both before it goes over the top and during the return
-        # swing after a wrap-around.
+        # Braking is applied regardless of wheel speed.  Returning zero
+        # voltage when the wheel is fast lets the motor's generator action
+        # (back-EMF driving current through R) produce a reaction torque
+        # that accelerates the pendulum through the M12 coupling, worsening
+        # the rotation.  The back-EMF naturally limits armature current at
+        # high wheel speeds, providing a physical cap on braking effort.
         upright_thresh = ctrl_params.upright_angle_threshold
         velocity_limit = ctrl_params.upright_velocity_threshold
         e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
 
         if e_pendulum > 0.0 and abs(theta_dot) > velocity_limit:
-            if abs_phi_dot < max_wheel_speed:
-                brake_scale = min(
-                    (abs(theta_dot) - velocity_limit) / max(velocity_limit, 0.5) + 0.3,
-                    1.0,
-                )
-                brake_voltage = math.copysign(
-                    brake_scale * sim_params.max_voltage, theta_dot
-                )
-                return self._clamp_voltage(brake_voltage, sim_params.max_voltage)
-            else:
-                return 0.0
+            brake_scale = min(
+                (abs(theta_dot) - velocity_limit) / max(velocity_limit, 0.5) + 0.3,
+                1.0,
+            )
+            brake_voltage = math.copysign(
+                brake_scale * sim_params.max_voltage, theta_dot
+            )
+            return self._clamp_voltage(brake_voltage, sim_params.max_voltage)
 
         # Secondary guard: even when energy is marginally below zero, a very
         # high angular velocity near upright indicates an imminent over-speed
@@ -963,7 +962,6 @@ class SwingUpBalanceController(Controller):
         if (
             abs(theta) < 3.0 * upright_thresh
             and abs(theta_dot) > 2.0 * velocity_limit
-            and abs_phi_dot < max_wheel_speed
         ):
             brake_scale = min(
                 (abs(theta_dot) - 2.0 * velocity_limit) / max(velocity_limit, 0.5) + 0.5,
