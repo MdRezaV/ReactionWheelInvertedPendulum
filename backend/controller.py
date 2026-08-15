@@ -951,6 +951,15 @@ class SwingUpBalanceController(Controller):
                     theta, theta_dot, phi_dot, sim_params, ctrl_params
                 )
 
+        # Near-upright voltage reduction: the balance handoff above requires
+        # both angle AND velocity within thresholds, so a fast pass-through
+        # at upright bypasses it and the swing-up law keeps pumping energy,
+        # causing continuous rotation.  Linearly taper the swing-up voltage
+        # to zero as |theta| -> 0 to prevent this.
+        upright_thresh = ctrl_params.upright_angle_threshold
+        if abs(theta) < upright_thresh:
+            voltage *= abs(theta) / max(upright_thresh, 1e-9)
+
         # Linearly taper voltage toward zero in the upper 20 % of the speed band.
         taper_threshold = 0.8 * max_wheel_speed
         if abs_phi_dot > taper_threshold:
