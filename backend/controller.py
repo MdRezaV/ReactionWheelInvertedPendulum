@@ -933,6 +933,19 @@ class SwingUpBalanceController(Controller):
                     theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
                 )
 
+        # Velocity governor near upright: if the pendulum is within the
+        # capture angle window but moving too fast for the balance controller,
+        # apply braking voltage to reduce velocity into the capture range.
+        # This prevents high-speed pass-throughs that lead to continuous rotation.
+        upright_thresh = ctrl_params.upright_angle_threshold
+        velocity_limit = ctrl_params.upright_velocity_threshold
+        if abs(theta) < 2.0 * upright_thresh and abs(theta_dot) > velocity_limit:
+            brake_scale = min(
+                (abs(theta_dot) - velocity_limit) / max(velocity_limit, 0.1), 1.0
+            )
+            brake_voltage = math.copysign(brake_scale * sim_params.max_voltage, theta_dot)
+            return self._clamp_voltage(brake_voltage, sim_params.max_voltage)
+
         # Swing-up region: enforce wheel-speed governor.
         if abs_phi_dot >= max_wheel_speed:
             return 0.0
