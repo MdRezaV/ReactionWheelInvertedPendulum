@@ -61,9 +61,9 @@ DEFAULT_SIMULATION_PARAMS: dict = {
 
 # Default control parameters
 DEFAULT_CONTROL_PARAMS: dict = {
-    "pid_kp": 50.0,
-    "pid_ki": 0.1,
-    "pid_kd": 10.0,
+    "pid_kp": 23.2149,
+    "pid_ki": 0.208198,
+    "pid_kd": 5.5524,
     "lqr_q_theta": 100.0,
     "lqr_q_theta_dot": 1.0,
     "lqr_q_phi_dot": 10.0,
