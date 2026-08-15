@@ -643,9 +643,9 @@ class SwingUpBalanceController(Controller):
         e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
         if e_pendulum > 0.0:
             excess_scale = min(
-                1.0 + e_pendulum / max(abs(gravity_coeff), 1e-6), 3.0
+                1.0 + e_pendulum / max(abs(gravity_coeff), 1e-6), 4.0
             )
-            brake_gain = ctrl_params.pfl_kd * excess_scale
+            brake_gain = ctrl_params.pfl_kd * 1.5 * excess_scale
             tau_wheel_des = brake_gain * theta_dot
             i_a_des = tau_wheel_des / (N * Kt)
             voltage = R * i_a_des + Ke * N * phi_dot
@@ -774,8 +774,8 @@ class SwingUpBalanceController(Controller):
             Kt = self._cached_Kt
             Ke = self._cached_Ke
             R = self._cached_R
-            excess_scale = min(1.0 + abs(e_error) / max(abs(self._cached_gravity_coeff), 1e-6), 3.0)
-            brake_gain = gain * 0.5 * excess_scale
+            excess_scale = min(1.0 + abs(e_error) / max(abs(self._cached_gravity_coeff), 1e-6), 4.0)
+            brake_gain = gain * 0.8 * excess_scale
             tau_wheel_des = brake_gain * theta_dot
             i_a_des = tau_wheel_des / (N * Kt)
             voltage = R * i_a_des + Ke * N * phi_dot
@@ -933,17 +933,45 @@ class SwingUpBalanceController(Controller):
                     theta, theta_dot, phi_dot, current, energy, time, sim_params, ctrl_params
                 )
 
-        # Velocity governor near upright: if the pendulum is within the
-        # capture angle window but moving too fast for the balance controller,
-        # apply braking voltage to reduce velocity into the capture range.
-        # This prevents high-speed pass-throughs that lead to continuous rotation.
+        # Rotation / overspeed recovery: when the pendulum has excess energy
+        # (enough to go over the top) and is moving fast, apply aggressive
+        # braking to shed energy and prevent continuous rotation.
+        # Unlike the previous narrow angle-window governor, this criterion is
+        # physically motivated and works at any pendulum angle, catching the
+        # pendulum both before it goes over the top and during the return
+        # swing after a wrap-around.
         upright_thresh = ctrl_params.upright_angle_threshold
         velocity_limit = ctrl_params.upright_velocity_threshold
-        if abs(theta) < 2.0 * upright_thresh and abs(theta_dot) > velocity_limit:
+        e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
+
+        if e_pendulum > 0.0 and abs(theta_dot) > velocity_limit:
+            if abs_phi_dot < max_wheel_speed:
+                brake_scale = min(
+                    (abs(theta_dot) - velocity_limit) / max(velocity_limit, 0.5) + 0.3,
+                    1.0,
+                )
+                brake_voltage = math.copysign(
+                    brake_scale * sim_params.max_voltage, theta_dot
+                )
+                return self._clamp_voltage(brake_voltage, sim_params.max_voltage)
+            else:
+                return 0.0
+
+        # Secondary guard: even when energy is marginally below zero, a very
+        # high angular velocity near upright indicates an imminent over-speed
+        # pass-through that the balance controller cannot capture.
+        if (
+            abs(theta) < 3.0 * upright_thresh
+            and abs(theta_dot) > 2.0 * velocity_limit
+            and abs_phi_dot < max_wheel_speed
+        ):
             brake_scale = min(
-                (abs(theta_dot) - velocity_limit) / max(velocity_limit, 0.1), 1.0
+                (abs(theta_dot) - 2.0 * velocity_limit) / max(velocity_limit, 0.5) + 0.5,
+                1.0,
             )
-            brake_voltage = math.copysign(brake_scale * sim_params.max_voltage, theta_dot)
+            brake_voltage = math.copysign(
+                brake_scale * sim_params.max_voltage, theta_dot
+            )
             return self._clamp_voltage(brake_voltage, sim_params.max_voltage)
 
         # Swing-up region: enforce wheel-speed governor.
@@ -964,20 +992,15 @@ class SwingUpBalanceController(Controller):
                     theta, theta_dot, phi_dot, sim_params, ctrl_params
                 )
 
-        # Near-upright voltage reduction: the balance handoff above requires
-        # both angle AND velocity within thresholds, so a fast pass-through
-        # at upright bypasses it and the swing-up law keeps pumping energy,
-        # causing continuous rotation.  Linearly taper the swing-up voltage
-        # to zero as |theta| -> 0 to prevent this.
-        # Skip the taper when pendulum energy exceeds the upright target:
-        # the swing-up law switches to active braking in that regime and
-        # suppressing the brake voltage allows the pendulum to accelerate
-        # through the top and spin continuously.
+        # Near-upright voltage reduction: linearly taper the swing-up voltage
+        # to zero as |theta| -> 0.  The rotation-recovery guard above already
+        # handles the high-energy / high-velocity case, so any code reaching
+        # this point is in a low-energy regime where tapering is safe and
+        # prevents residual swing-up voltage from pushing the pendulum through
+        # the upright at marginal speeds.
         upright_thresh = ctrl_params.upright_angle_threshold
         if abs(theta) < upright_thresh:
-            e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
-            if e_pendulum <= 0.0:
-                voltage *= abs(theta) / max(upright_thresh, 1e-9)
+            voltage *= abs(theta) / max(upright_thresh, 1e-9)
 
         # Linearly taper voltage toward zero in the upper 20 % of the speed band.
         taper_threshold = 0.8 * max_wheel_speed
