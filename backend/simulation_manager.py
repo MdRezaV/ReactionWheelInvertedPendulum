@@ -239,16 +239,20 @@ class SimulationManager:
 
         Stops the simulation, resets physics and controllers, and clears
         telemetry history. Does not change parameters or control mode.
+        Broadcasts a telemetry snapshot so clients immediately render
+        the new initial state.
         """
         self._status = SimulationStatus.stopped
         self._sim.reset()
         self._ctrl_manager.reset()
         self._ws_manager.reset_throttle()
         self._last_voltage = 0.0
-        self._last_telemetry = None
         self._warnings.clear()
         self._active_disturbances.clear()
         self._disturbance_step_counts.clear()
+        telemetry = self._sim.get_telemetry(self._ctrl_manager.mode)
+        self._last_telemetry = telemetry
+        await self._ws_manager.broadcast_telemetry(telemetry)
         await self._push_status()
         logger.info("Simulation reset.")
 
