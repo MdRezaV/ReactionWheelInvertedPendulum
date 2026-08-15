@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 
 # ── System parameters (defaults from backend/config.py) ─────────────
 
-PENDULUM_MASS          = 0.4        # kg
+PENDULUM_MASS          = 1.0        # kg
 PENDULUM_LENGTH        = 0.3        # m
 WHEEL_MASS             = 0.25       # kg
 WHEEL_INNER_RADIUS     = 0.02       # m

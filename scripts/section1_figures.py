@@ -28,7 +28,7 @@ from matplotlib.lines import Line2D
 
 # ── System parameters (defaults from backend/config.py) ─────────────
 
-PENDULUM_MASS       = 0.4
+PENDULUM_MASS       = 1.0
 PENDULUM_LENGTH     = 0.3
 WHEEL_MASS          = 0.25
 WHEEL_INNER_RADIUS  = 0.02

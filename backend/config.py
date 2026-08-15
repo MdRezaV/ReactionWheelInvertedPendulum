@@ -33,7 +33,7 @@ CORS_ORIGINS: list[str] = [
 # Default simulation parameters (upright-near-balance demo)
 # Motor: 12V DC, 330 rpm no-load, 34W, 2.8A, 2.5 kg·cm torque
 DEFAULT_SIMULATION_PARAMS: dict = {
-    "pendulum_mass": 0.4,
+    "pendulum_mass": 1.0,
     "pendulum_length": 0.3,
     "pendulum_com_length": None,
     "pendulum_inertia": None,
@@ -61,9 +61,9 @@ DEFAULT_SIMULATION_PARAMS: dict = {
 
 # Default control parameters
 DEFAULT_CONTROL_PARAMS: dict = {
-    "pid_kp": 23.2149,
-    "pid_ki": 0.208198,
-    "pid_kd": 5.5524,
+    "pid_kp": 24.7497,
+    "pid_ki": 0.158876,
+    "pid_kd": 5.4026,
     "lqr_q_theta": 100.0,
     "lqr_q_theta_dot": 1.0,
     "lqr_q_phi_dot": 10.0,
