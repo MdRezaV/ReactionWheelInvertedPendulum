@@ -956,9 +956,15 @@ class SwingUpBalanceController(Controller):
         # at upright bypasses it and the swing-up law keeps pumping energy,
         # causing continuous rotation.  Linearly taper the swing-up voltage
         # to zero as |theta| -> 0 to prevent this.
+        # Skip the taper when pendulum energy exceeds the upright target:
+        # the swing-up law switches to active braking in that regime and
+        # suppressing the brake voltage allows the pendulum to accelerate
+        # through the top and spin continuously.
         upright_thresh = ctrl_params.upright_angle_threshold
         if abs(theta) < upright_thresh:
-            voltage *= abs(theta) / max(upright_thresh, 1e-9)
+            e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
+            if e_pendulum <= 0.0:
+                voltage *= abs(theta) / max(upright_thresh, 1e-9)
 
         # Linearly taper voltage toward zero in the upper 20 % of the speed band.
         taper_threshold = 0.8 * max_wheel_speed
