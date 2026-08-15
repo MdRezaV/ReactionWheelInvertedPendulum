@@ -1186,6 +1186,12 @@ class ControllerManager:
     ) -> float:
         """Delegate voltage computation to the active controller.
 
+        A global wheel-speed governor cuts the voltage to zero whenever
+        ``|phi_dot|`` exceeds ``ctrl_params.swing_up_max_wheel_speed``,
+        regardless of the active control mode.  With zero applied voltage
+        the back-EMF drives current through the armature resistance,
+        producing a natural braking torque that decelerates the wheel.
+
         Parameters
         ----------
         theta : float
@@ -1206,6 +1212,10 @@ class ControllerManager:
         float
             Voltage command [V] clamped to [-max_voltage, max_voltage].
         """
+        max_wheel_speed = self._ctrl_params.swing_up_max_wheel_speed
+        if abs(phi_dot) > max_wheel_speed:
+            return 0.0
+
         controller = self._get_active_controller()
         return controller.compute_voltage(
             theta, theta_dot, phi_dot, current, energy, time,
