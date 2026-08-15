@@ -636,11 +636,20 @@ class SwingUpBalanceController(Controller):
         R = self._cached_R
 
         # Energy-aware saturation: if pendulum energy exceeds upright target,
-        # apply wheel damping instead of further pumping to prevent continuous rotation.
+        # actively brake the pendulum by commanding wheel torque proportional
+        # to theta_dot.  Through the M12 coupling this produces a reaction
+        # torque that decelerates the pendulum (unlike wheel braking which
+        # accelerates it).
         e_pendulum = self._compute_pendulum_energy(theta, theta_dot, sim_params)
         if e_pendulum > 0.0:
-            v_damping = -Ke * N * phi_dot
-            return self._clamp_voltage(v_damping, max_voltage)
+            excess_scale = min(
+                1.0 + e_pendulum / max(abs(gravity_coeff), 1e-6), 3.0
+            )
+            brake_gain = ctrl_params.pfl_kd * excess_scale
+            tau_wheel_des = brake_gain * theta_dot
+            i_a_des = tau_wheel_des / (N * Kt)
+            voltage = R * i_a_des + Ke * N * phi_dot
+            return self._clamp_voltage(voltage, max_voltage)
 
         # Near the downward equilibrium (|theta| ≈ π), sin(theta) ≈ 0 creates
         # a control singularity where the PFL law produces zero voltage.
@@ -757,10 +766,20 @@ class SwingUpBalanceController(Controller):
 
         gain = ctrl_params.energy_swing_up_gain
 
-        # If pendulum energy exceeds target, apply damping to bleed wheel energy
+        # If pendulum energy exceeds target, brake the pendulum by commanding
+        # wheel torque proportional to theta_dot (correct coupling direction).
         if e_error < 0.0:
-            v_damping = -gain * 0.5 * phi_dot
-            return self._clamp_voltage(v_damping, max_voltage)
+            self._ensure_derived(sim_params)
+            N = self._cached_N
+            Kt = self._cached_Kt
+            Ke = self._cached_Ke
+            R = self._cached_R
+            excess_scale = min(1.0 + abs(e_error) / max(abs(self._cached_gravity_coeff), 1e-6), 3.0)
+            brake_gain = gain * 0.5 * excess_scale
+            tau_wheel_des = brake_gain * theta_dot
+            i_a_des = tau_wheel_des / (N * Kt)
+            voltage = R * i_a_des + Ke * N * phi_dot
+            return self._clamp_voltage(voltage, max_voltage)
 
         # Energy-pumping law: V = -gain * e_error * phi_dot
         # (negative sign ensures energy flows into the pendulum)
