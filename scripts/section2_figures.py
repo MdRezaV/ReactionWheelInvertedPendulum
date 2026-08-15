@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Optimal LQR and PID gain computation for the reaction wheel inverted pendulum.
+"""Section 2 figures and numerical results for the reaction wheel inverted pendulum.
 
-Computes:
-  1. LQR optimal gains via the continuous algebraic Riccati equation (CARE).
-  2. PID gains optimized by minimizing the ITAE cost over a full nonlinear
-     5-state simulation (Nelder–Mead).
+Generates:
+  1. Numerical inertia matrix values (M11, M12, M22, Δ).
+  2. Numerical LQR linearized A (4×4) and B (4×1) matrices.
+  3. Sliding Mode Controller step response (full 5-state nonlinear plant).
+  4. Open-loop (no control) response showing pendulum divergence.
+  5. Three-way comparison plot: LQR vs PID vs SMC.
+  6. Individual SMC and open-loop plots.
 
-Generates step-response plots and saves them to ``latex/results/``.
+Saves plots to ``latex/results/`` and numerical results to
+``latex/results/section2_results.txt``.
 
 Usage (from the project root):
-    uv run --with numpy --with scipy --with matplotlib scripts/optimal_gains.py
+    uv run --with numpy --with scipy --with matplotlib scripts/section2_figures.py
 """
 
 from __future__ import annotations
@@ -18,7 +22,6 @@ import os
 
 import numpy as np
 from scipy.linalg import solve_continuous_are
-from scipy.optimize import minimize
 
 import matplotlib
 matplotlib.use("Agg")
@@ -26,22 +29,35 @@ import matplotlib.pyplot as plt
 
 # ── System parameters (defaults from backend/config.py) ─────────────
 
-PENDULUM_MASS       = 0.4        # kg
-PENDULUM_LENGTH     = 0.3        # m
-WHEEL_MASS          = 0.25       # kg
-WHEEL_INNER_RADIUS  = 0.02       # m
-WHEEL_OUTER_RADIUS  = 0.07       # m
-DAMPING             = 0.001      # N·m·s/rad
-WHEEL_DAMPING       = 0.0005     # N·m·s/rad
-GRAVITY             = 9.81       # m/s²
-TIME_STEP           = 0.001      # s
-MAX_VOLTAGE         = 12.0       # V
-MOTOR_RESISTANCE    = 1.2        # Ω
-MOTOR_INDUCTANCE    = 0.0005     # H
-MOTOR_CONSTANT      = 0.0876     # N·m/A  (= V·s/rad)
-MOTOR_ROTOR_INERTIA = 5e-5       # kg·m²
-MOTOR_VISCOUS_FRICTION = 0.001   # N·m·s/rad
-GEAR_RATIO          = 1.0        # –
+PENDULUM_MASS          = 0.4        # kg
+PENDULUM_LENGTH        = 0.3        # m
+WHEEL_MASS             = 0.25       # kg
+WHEEL_INNER_RADIUS     = 0.02       # m
+WHEEL_OUTER_RADIUS     = 0.07       # m
+DAMPING                = 0.001      # N·m·s/rad
+WHEEL_DAMPING          = 0.0005     # N·m·s/rad
+GRAVITY                = 9.81       # m/s²
+TIME_STEP              = 0.001      # s
+MAX_VOLTAGE            = 12.0       # V
+MOTOR_RESISTANCE       = 1.2        # Ω
+MOTOR_INDUCTANCE       = 0.0005     # H
+MOTOR_CONSTANT         = 0.0876     # N·m/A  (= V·s/rad)
+MOTOR_ROTOR_INERTIA    = 5e-5       # kg·m²
+MOTOR_VISCOUS_FRICTION = 0.001      # N·m·s/rad
+GEAR_RATIO             = 1.0        # –
+
+# SMC default parameters (from backend/config.py)
+SMC_C1       = 10.0
+SMC_C2       = 5.0
+SMC_C3       = 1.0
+SMC_K        = 2.0
+SMC_ETA      = 0.5
+SMC_BOUNDARY = 0.05
+
+# Optimized PID gains (from optimal_gains.py results)
+PID_KP = 145.23
+PID_KI = 8e-6
+PID_KD = 0.97
 
 # ── Derived quantities ──────────────────────────────────────────────
 
@@ -98,7 +114,7 @@ def wrap_angle(a: float) -> float:
     return (a + np.pi) % (2.0 * np.pi) - np.pi
 
 
-# ── LQR ─────────────────────────────────────────────────────────────
+# ── LQR matrices ────────────────────────────────────────────────────
 
 def build_lqr_matrices() -> tuple[np.ndarray, np.ndarray]:
     """Linearized (A, B) for state [θ, θ̇, φ̇, i_a], input V."""
@@ -136,6 +152,8 @@ def compute_lqr_gains(
     return K, A, B_mat, P
 
 
+# ── Simulation helpers ──────────────────────────────────────────────
+
 def simulate_lqr(
     K: np.ndarray, theta0: float, duration: float, dt: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -160,8 +178,6 @@ def simulate_lqr(
 
     return t, states, voltages
 
-
-# ── PID ─────────────────────────────────────────────────────────────
 
 def simulate_pid(
     kp: float, ki: float, kd: float,
@@ -199,49 +215,79 @@ def simulate_pid(
     return t, states, voltages
 
 
-def itae_cost(params: np.ndarray, theta0: float, duration: float, dt: float) -> float:
-    """ITAE cost for a PID candidate: ∫ t·|θ(t)| dt."""
-    kp, ki, kd = params
-    if kp < 0.0 or ki < 0.0 or kd < 0.0:
-        return 1e10
-    try:
-        t, states, _ = simulate_pid(kp, ki, kd, theta0, duration, dt)
-        theta = states[:, 0]
-        cost = float(np.sum(t * np.abs(theta)) * dt)
-        return cost if np.isfinite(cost) else 1e10
-    except Exception:
-        return 1e10
+def simulate_smc(
+    theta0: float, duration: float, dt: float,
+    c1: float = SMC_C1, c2: float = SMC_C2, c3: float = SMC_C3,
+    k: float = SMC_K, eta: float = SMC_ETA, boundary: float = SMC_BOUNDARY,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simulate the nonlinear plant under Sliding Mode Control."""
+    steps = int(duration / dt)
+    t = np.arange(steps) * dt
+    states = np.zeros((steps, 5))
+    voltages = np.zeros(steps)
+
+    state = np.array([theta0, 0.0, 0.0, 0.0, 0.0])
+
+    for i in range(steps):
+        theta, theta_dot, _, phi_dot, _ = state
+
+        # Sliding surface
+        s = c1 * theta + c2 * theta_dot + c3 * phi_dot
+
+        # Boundary-layer saturation
+        s_normalized = s / boundary
+        if abs(s_normalized) <= 1.0:
+            sat_val = s_normalized
+        else:
+            sat_val = 1.0 if s_normalized > 0 else -1.0
+
+        # Control law
+        V = -k * sat_val - eta * s
+        V = float(np.clip(V, -MAX_VOLTAGE, MAX_VOLTAGE))
+
+        states[i] = state
+        voltages[i] = V
+
+        state = rk4_step(state, V, dt)
+        state[0] = wrap_angle(state[0])
+        state[2] = wrap_angle(state[2])
+
+    return t, states, voltages
 
 
-def optimize_pid(
-    theta0: float = 0.1,
-    duration: float = 5.0,
-    dt: float = 0.001,
-) -> tuple[np.ndarray, float]:
-    """Nelder–Mead optimization of (Kp, Ki, Kd) minimizing ITAE."""
-    x0 = np.array([50.0, 0.1, 10.0])
-    result = minimize(
-        itae_cost, x0,
-        args=(theta0, duration, dt),
-        method="Nelder-Mead",
-        options={"maxiter": 300, "xatol": 0.05, "fatol": 1e-5},
-    )
-    return result.x, result.fun
+def simulate_open_loop(
+    theta0: float, duration: float, dt: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Simulate the nonlinear plant with V=0 (no control)."""
+    steps = int(duration / dt)
+    t = np.arange(steps) * dt
+    states = np.zeros((steps, 5))
+
+    state = np.array([theta0, 0.0, 0.0, 0.0, 0.0])
+
+    for i in range(steps):
+        states[i] = state
+        state = rk4_step(state, 0.0, dt)
+        state[0] = wrap_angle(state[0])
+        state[2] = wrap_angle(state[2])
+
+    return t, states
 
 
 # ── Plotting ────────────────────────────────────────────────────────
 
-def plot_lqr_response(
+def plot_smc_response(
     t: np.ndarray, states: np.ndarray, voltages: np.ndarray,
-    K: np.ndarray, save_path: str,
+    save_path: str,
 ) -> None:
     fig, axes = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-    axes[0].plot(t, np.degrees(states[:, 0]), "b-", linewidth=1.2)
+    axes[0].plot(t, np.degrees(states[:, 0]), "m-", linewidth=1.2)
     axes[0].set_ylabel(r"$\theta$ [deg]")
     axes[0].set_title(
-        f"LQR Step Response   "
-        rf"$K=[{K[0]:.2f},\;{K[1]:.2f},\;{K[2]:.2f},\;{K[3]:.2f}]$"
+        f"SMC Step Response   "
+        rf"$c_1\!=\!{SMC_C1},\;c_2\!=\!{SMC_C2},\;c_3\!=\!{SMC_C3},\;"
+        rf"K\!=\!{SMC_K},\;\eta\!=\!{SMC_ETA},\;\Phi\!=\!{SMC_BOUNDARY}$"
     )
     axes[0].grid(True, alpha=0.3)
     axes[0].axhline(0, color="k", linewidth=0.5)
@@ -256,35 +302,27 @@ def plot_lqr_response(
     plt.close(fig)
 
 
-def plot_pid_response(
-    t: np.ndarray, states: np.ndarray, voltages: np.ndarray,
-    gains: np.ndarray, cost: float, save_path: str,
+def plot_open_loop_response(
+    t: np.ndarray, states: np.ndarray, save_path: str,
 ) -> None:
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    fig, ax = plt.subplots(figsize=(10, 5))
 
-    axes[0].plot(t, np.degrees(states[:, 0]), "g-", linewidth=1.2)
-    axes[0].set_ylabel(r"$\theta$ [deg]")
-    axes[0].set_title(
-        f"Optimized PID Step Response   "
-        rf"$K_p\!=\!{gains[0]:.2f},\;K_i\!=\!{gains[1]:.4f},\;K_d\!=\!{gains[2]:.2f}$"
-        f"   (ITAE = {cost:.4f})"
-    )
-    axes[0].grid(True, alpha=0.3)
-    axes[0].axhline(0, color="k", linewidth=0.5)
-
-    axes[1].plot(t, voltages, "r-", linewidth=1.0)
-    axes[1].set_ylabel("Voltage [V]")
-    axes[1].set_xlabel("Time [s]")
-    axes[1].grid(True, alpha=0.3)
+    ax.plot(t, np.degrees(states[:, 0]), "k-", linewidth=1.2)
+    ax.set_ylabel(r"$\theta$ [deg]")
+    ax.set_xlabel("Time [s]")
+    ax.set_title(r"Open-Loop Response ($V=0$, $\theta_0 = 0.1$ rad)")
+    ax.grid(True, alpha=0.3)
+    ax.axhline(0, color="gray", linewidth=0.5)
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_comparison(
+def plot_three_comparison(
     t_lqr: np.ndarray, states_lqr: np.ndarray,
     t_pid: np.ndarray, states_pid: np.ndarray,
+    t_smc: np.ndarray, states_smc: np.ndarray,
     save_path: str,
 ) -> None:
     fig, axes = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
@@ -293,15 +331,20 @@ def plot_comparison(
                  label="LQR", linewidth=1.2)
     axes[0].plot(t_pid, np.degrees(states_pid[:, 0]), "g--",
                  label="PID (optimized)", linewidth=1.2)
+    axes[0].plot(t_smc, np.degrees(states_smc[:, 0]), "m-.",
+                 label="SMC", linewidth=1.2)
     axes[0].set_ylabel(r"$\theta$ [deg]")
-    axes[0].set_title("LQR vs. Optimized PID — Pendulum Angle")
+    axes[0].set_title("LQR vs. PID vs. SMC — Pendulum Angle")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
+    axes[0].axhline(0, color="k", linewidth=0.5)
 
     axes[1].plot(t_lqr, np.degrees(states_lqr[:, 3]), "b-",
                  label="LQR", linewidth=1.0)
     axes[1].plot(t_pid, np.degrees(states_pid[:, 3]), "g--",
                  label="PID (optimized)", linewidth=1.0)
+    axes[1].plot(t_smc, np.degrees(states_smc[:, 3]), "m-.",
+                 label="SMC", linewidth=1.0)
     axes[1].set_ylabel(r"$\dot{\varphi}$ [deg/s]")
     axes[1].set_xlabel("Time [s]")
     axes[1].set_title("Wheel Angular Velocity")
@@ -319,7 +362,7 @@ def main() -> None:
     results_dir = os.path.join("latex", "results")
     os.makedirs(results_dir, exist_ok=True)
 
-    theta0   = 0.1       # initial displacement [rad] ≈ 5.7°
+    theta0   = 0.1       # initial displacement [rad]
     duration = 5.0       # simulation horizon [s]
     dt       = TIME_STEP
 
@@ -329,16 +372,45 @@ def main() -> None:
         print(msg)
         lines.append(msg)
 
-    # ── LQR ──
+    # ── 1. Inertia matrix values ──
     log("=" * 60)
-    log("  LQR Optimal Gain Computation")
+    log("  Inertia Matrix Numerical Values")
+    log("=" * 60)
+    log(f"  I_p       = {I_P:.8e}  kg·m²")
+    log(f"  I_w       = {I_W:.8e}  kg·m²")
+    log(f"  I_w_eff   = {I_W_EFF:.8e}  kg·m²")
+    log(f"  M11       = {M11:.8e}  kg·m²")
+    log(f"  M12       = {M12:.8e}  kg·m²")
+    log(f"  M22       = {M22:.8e}  kg·m²")
+    log(f"  Δ (det)   = {DET_M:.8e}  kg²·m⁴")
+    log()
+
+    # ── 2. LQR A and B matrices ──
+    log("=" * 60)
+    log("  LQR Linearized Matrices")
     log("=" * 60)
 
+    A_mat, B_mat = build_lqr_matrices()
+
+    log("  A matrix (4×4):")
+    for row_idx in range(4):
+        row_str = "    ["
+        for col_idx in range(4):
+            row_str += f"  {A_mat[row_idx, col_idx]:+14.8f}"
+        row_str += " ]"
+        log(row_str)
+    log()
+    log("  B matrix (4×1):")
+    for row_idx in range(4):
+        log(f"    [  {B_mat[row_idx, 0]:+14.8f} ]")
+    log()
+
+    # ── LQR gains and closed-loop poles ──
     q_diag = [100.0, 1.0, 10.0, 0.01]
     r_lqr  = 1.0
 
-    K, A, B_mat, P = compute_lqr_gains(q_diag, r_lqr)
-    A_cl = A - B_mat @ K.reshape(1, -1)
+    K, A_full, B_full, P = compute_lqr_gains(q_diag, r_lqr)
+    A_cl = A_full - B_full @ K.reshape(1, -1)
     poles = np.linalg.eigvals(A_cl)
 
     log(f"  Q  = diag({q_diag})")
@@ -349,48 +421,57 @@ def main() -> None:
         log(f"    {p.real:+.4f} {p.imag:+.4f}j")
     log()
 
-    t_lqr, states_lqr, voltages_lqr = simulate_lqr(K, theta0, duration, dt)
-
-    # ── PID optimisation ──
+    # ── 3. SMC parameters ──
     log("=" * 60)
-    log("  PID Gain Optimization  (ITAE, Nelder–Mead)")
+    log("  Sliding Mode Controller Parameters")
     log("=" * 60)
-    log(f"  Initial guess : Kp=50, Ki=0.1, Kd=10")
-    log(f"  θ₀ = {theta0} rad, T = {duration} s, dt = {dt} s")
-    log("  Optimizing …")
-
-    pid_gains, pid_cost = optimize_pid(theta0=theta0, duration=duration, dt=dt)
-
-    log(f"  Optimal Kp = {pid_gains[0]:.4f}")
-    log(f"  Optimal Ki = {pid_gains[1]:.6f}")
-    log(f"  Optimal Kd = {pid_gains[2]:.4f}")
-    log(f"  ITAE cost  = {pid_cost:.6f}")
+    log(f"  c1       = {SMC_C1}")
+    log(f"  c2       = {SMC_C2}")
+    log(f"  c3       = {SMC_C3}")
+    log(f"  K        = {SMC_K}")
+    log(f"  η        = {SMC_ETA}")
+    log(f"  Φ        = {SMC_BOUNDARY}")
     log()
 
+    # ── Simulations ──
+    log("Running simulations …")
+
+    t_lqr, states_lqr, voltages_lqr = simulate_lqr(K, theta0, duration, dt)
+    log("  LQR done.")
+
     t_pid, states_pid, voltages_pid = simulate_pid(
-        pid_gains[0], pid_gains[1], pid_gains[2], theta0, duration, dt,
+        PID_KP, PID_KI, PID_KD, theta0, duration, dt,
     )
+    log("  PID done.")
+
+    t_smc, states_smc, voltages_smc = simulate_smc(theta0, duration, dt)
+    log("  SMC done.")
+
+    t_ol, states_ol = simulate_open_loop(theta0, duration=3.0, dt=dt)
+    log("  Open-loop done.")
+    log()
 
     # ── Plots ──
     log("Generating plots …")
 
-    p1 = os.path.join(results_dir, "lqr_step_response.png")
-    plot_lqr_response(t_lqr, states_lqr, voltages_lqr, K, p1)
+    p1 = os.path.join(results_dir, "smc_step_response.png")
+    plot_smc_response(t_smc, states_smc, voltages_smc, p1)
     log(f"  {p1}")
 
-    p2 = os.path.join(results_dir, "pid_step_response.png")
-    plot_pid_response(t_pid, states_pid, voltages_pid, pid_gains, pid_cost, p2)
+    p2 = os.path.join(results_dir, "open_loop_response.png")
+    plot_open_loop_response(t_ol, states_ol, p2)
     log(f"  {p2}")
 
-    p3 = os.path.join(results_dir, "lqr_vs_pid_comparison.png")
-    plot_comparison(t_lqr, states_lqr, t_pid, states_pid, p3)
+    p3 = os.path.join(results_dir, "three_controller_comparison.png")
+    plot_three_comparison(t_lqr, states_lqr, t_pid, states_pid,
+                          t_smc, states_smc, p3)
     log(f"  {p3}")
 
     log()
     log("Done.")
 
     # ── Save text output ──
-    txt_path = os.path.join(results_dir, "gain_results.txt")
+    txt_path = os.path.join(results_dir, "section2_results.txt")
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"\nText output saved to {txt_path}")

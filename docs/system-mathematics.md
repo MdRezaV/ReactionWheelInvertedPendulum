@@ -53,7 +53,7 @@ For complete parameter definitions, units, and measurement methods, see [Physica
 
 | Parameter | Symbol | Default | Unit |
 |-----------|--------|---------|------|
-| Gear ratio | $N$ | 4.0 | — |
+| Gear ratio | $N$ | 1.0 | — |
 | Motor torque/back-EMF constant | $K_t = K_e$ | 0.0876 | N·m/A = V·s/rad |
 | Armature resistance | $R$ | 1.2 | Ω |
 | Armature inductance | $L$ | 0.0005 | H |

@@ -51,7 +51,7 @@ DEFAULT_SIMULATION_PARAMS: dict = {
     "motor_constant": 0.0876,
     "motor_rotor_inertia": 5e-5,
     "motor_viscous_friction": 0.001,
-    "gear_ratio": 4.0,
+    "gear_ratio": 1.0,
     "initial_theta": 0.05,
     "initial_theta_dot": 0.0,
     "initial_phi": 0.0,

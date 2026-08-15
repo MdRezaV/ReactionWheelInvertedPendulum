@@ -1,0 +1,29 @@
+============================================================
+  LQR Optimal Gain Computation
+============================================================
+  Q  = diag([100.0, 1.0, 10.0, 0.01])
+  R  = 1.0
+  K  = [-844.458886,  -138.691560,  -2.318624,  0.162890]
+  Closed-loop poles:
+    -2374.5988 +0.0000j
+    -341.2154 +0.0000j
+    -6.1226 +0.0000j
+    -6.0205 +0.0000j
+
+============================================================
+  PID Gain Optimization  (ITAE, Nelder–Mead)
+============================================================
+  Initial guess : Kp=50, Ki=0.1, Kd=10
+  θ₀ = 0.1 rad, T = 5.0 s, dt = 0.001 s
+  Optimizing …
+  Optimal Kp = 23.2149
+  Optimal Ki = 0.208198
+  Optimal Kd = 5.5524
+  ITAE cost  = 2.280305
+
+Generating plots …
+  latex/results/lqr_step_response.png
+  latex/results/pid_step_response.png
+  latex/results/lqr_vs_pid_comparison.png
+
+Done.

@@ -148,6 +148,9 @@ backend/
 ├── requirements.txt        # Pinned dependencies
 └── tests/                  # pytest suite
 
+scripts/
+└── optimal_gains.py        # LQR / PID optimal gain computation + plots
+
 frontend/
 ├── src/
 │   ├── App.jsx             # Root component
@@ -180,6 +183,24 @@ python -m pytest tests/ -v
 ```
 
 Tests use `pytest-asyncio` in auto mode and `httpx.AsyncClient` with ASGI transport. No wall-clock dependence — physics is advanced deterministically via the `step` endpoint.
+
+## Optimal Gain Computation
+
+A standalone script in `scripts/` computes optimal LQR gains (via the continuous algebraic Riccati equation) and optimizes PID gains (minimizing ITAE over a full nonlinear 5-state simulation), then saves step-response plots to `latex/results/`.
+
+Run from the project root:
+
+```bash
+uv run --with numpy --with scipy --with matplotlib scripts/optimal_gains.py
+```
+
+Generated files:
+
+| File | Content |
+|------|---------|
+| `latex/results/lqr_step_response.png` | LQR angle + voltage step response |
+| `latex/results/pid_step_response.png` | Optimized PID angle + voltage step response |
+| `latex/results/lqr_vs_pid_comparison.png` | Side-by-side angle and wheel-speed comparison |
 
 ## Contributing
 
